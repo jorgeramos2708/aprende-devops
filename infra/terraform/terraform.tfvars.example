@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars and fill in
+cloudflare_api_token = "cf_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+zone_name           = "edrs.xyz"
+subdomain           = "learn"
+vm_host             = "YOUR_VM_PUBLIC_IP"
+ssh_public_key      = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... user@host"
+ssh_private_key     = "-----BEGIN OPENSSH PRIVATE KEY-----
+...
+-----END OPENSSH PRIVATE KEY-----"

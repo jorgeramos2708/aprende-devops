@@ -1,0 +1,12 @@
+# WEB - React + Vite build estático servido por nginx (edge Caddy en VPS hace TLS para aprende-devops.edrs.xyz)
+FROM node:20-alpine AS build
+WORKDIR /web
+COPY web/package.json ./
+RUN npm install
+COPY web/ ./
+RUN npm run build
+
+FROM nginx:alpine AS runtime
+COPY --from=build /web/dist/ /usr/share/nginx/html/
+COPY infra/docker-compose/nginx-web.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80

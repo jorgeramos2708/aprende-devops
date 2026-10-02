@@ -1,0 +1,205 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  NODE_VERSION: '20.x'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ----------------------------------------------------------
+  # .NET BACKEND: Build, Test, Publish
+  # ----------------------------------------------------------
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./src
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+      
+      - name: Restore dependencies
+        run: dotnet restore DevOpsPlatform.sln
+      
+      - name: Build
+        run: dotnet build DevOpsPlatform.sln --no-restore --configuration Release
+      
+      - name: Run unit tests
+        run: dotnet test DevOpsPlatform.sln --no-build --configuration Release --collect:"XPlat Code Coverage" --results-directory ../test-results
+      
+      - name: Publish API
+        run: dotnet publish DevOpsPlatform.Api/DevOpsPlatform.Api.csproj --no-build --configuration Release --output ../artifacts/api
+      
+      - name: Upload API artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api
+          path: artifacts/api/
+          retention-days: 1
+
+  # ----------------------------------------------------------
+  # FRONTEND: Build, Test, Lint
+  # ----------------------------------------------------------
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./web
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run lint
+        run: npm run lint
+      
+      - name: Run type check
+        run: npm run typecheck
+      
+      - name: Run unit tests
+        run: npm run test -- --run
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+          retention-days: 1
+
+  # ----------------------------------------------------------
+  # DOCKER: Build & Push Images
+  # ----------------------------------------------------------
+  docker:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download API artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: api
+          path: artifacts/api
+      
+      - name: Download Web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: artifacts/web
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata for API
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push API
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./src/DevOpsPlatform.Api/Dockerfile
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Extract metadata for Web
+        id: meta-web
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/web
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push Web
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./web/Dockerfile
+          push: true
+          tags: ${{ steps.meta-web.outputs.tags }}
+          labels: ${{ steps.meta-web.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ----------------------------------------------------------
+  # DEPLOY TO VM (on main branch)
+  # ----------------------------------------------------------
+  deploy:
+    needs: docker
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+      
+      - name: Deploy via SSH
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
+            cd /opt/devops-platform
+            
+            # Pull latest images
+            docker compose -f docker-compose.prod.yml pull
+            
+            # Run database migrations
+            docker compose -f docker-compose.prod.yml run --rm api dotnet DevOpsPlatform.Api.dll migrate
+            
+            # Restart services
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            
+            # Clean up old images
+            docker image prune -f
+          EOF
+      
+      - name: Health check
+        run: |
+          sleep 30
+          curl -f https://learn.edrs.xyz/health || exit 1

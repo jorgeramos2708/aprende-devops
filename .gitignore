@@ -1,0 +1,38 @@
+# .NET
+bin/
+obj/
+out/
+TestResults/
+*.user
+*.suo
+.vs/
+logs/
+
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+*.local
+vite.config.ts.timestamp-*
+
+# Docker
+.docker/
+
+# Env / secrets - nunca commitear reales
+.env
+.env.*
+*.pfx
+*.p12
+secrets/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Logs / backups
+*.log
+backups/
+data/

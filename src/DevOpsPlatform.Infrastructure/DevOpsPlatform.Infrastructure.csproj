@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DevOpsPlatform.Core\DevOpsPlatform.Core.csproj" />
+    <PackageReference Include="Docker.DotNet" Version="3.125.5" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0" PrivateAssets="All" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" Version="9.0.0" />
+    <PackageReference Include="StackExchange.Redis" Version="2.7.33" />
+    <PackageReference Include="Minio" Version="6.0.4" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="5.5.1" />
+    <PackageReference Include="OpenIddict.AspNetCore" Version="5.5.1" />
+    <PackageReference Include="OpenIddict.Validation.AspNetCore" Version="5.5.1" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="9.0.0" />
+    <PackageReference Include="Markdig" Version="0.38.0" />
+    <PackageReference Include="YamlDotNet" Version="15.1.2" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,22 @@
+# Edge Caddy en VPS Contabo - TLS automático para aprende-devops.edrs.xyz
+# Uso en VPS: caddy run --config infra/docker-compose/Caddyfile --adapter caddyfile
+aprende-devops.edrs.xyz {
+	root * /srv/web
+	file_server
+	try_files {path} /index.html
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle /api/labs/ws* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	encode gzip
+	header {
+		X-Frame-Options SAMEORIGIN
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}
