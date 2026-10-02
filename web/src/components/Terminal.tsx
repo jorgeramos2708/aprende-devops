@@ -105,8 +105,10 @@ export function Terminal({ attemptId, cols = 120, rows = 30, onConnect, onDiscon
           if (data.type === 'output') {
             term.write(data.data)
           } else if (data.type === 'error') {
-            term.write(`
-[31m[Error: ${data.message}][0m
+            term.write(`
+
+[31m[Error: ${data.message}][0m
+
 `)
           }
         } catch {
@@ -118,9 +120,7 @@ export function Terminal({ attemptId, cols = 120, rows = 30, onConnect, onDiscon
       ws.onclose = () => {
         setConnected(false)
         onDisconnect?.()
-        term.write('
-[33m[Conexión cerrada][0m
-')
+        term.write('\r\n\x1b[33m[Conexión cerrada]\x1b[0m\r\n')
       }
 
       ws.onerror = (err) => {
