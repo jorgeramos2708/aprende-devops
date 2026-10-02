@@ -1,6 +1,7 @@
 namespace DevOpsPlatform.Core.Interfaces;
 
 using DevOpsPlatform.Core.Entities;
+using DevOpsPlatform.Core.Enums;
 using DevOpsPlatform.Core.Models;
 using System.Text.Json;
 
@@ -25,6 +26,8 @@ public interface ILabOrchestrator
     Task<LabSession> StartLabAsync(Ulid labEnvironmentId, Ulid userId, CancellationToken ct = default);
     Task<LabSession?> GetSessionAsync(Ulid attemptId, CancellationToken ct = default);
     Task<TerminalConnection> ConnectTerminalAsync(Ulid attemptId, int cols, int rows, CancellationToken ct = default);
+    Task SendTerminalInputAsync(Ulid attemptId, string input, CancellationToken ct = default);
+    Task ResizeTerminalAsync(Ulid attemptId, int cols, int rows, CancellationToken ct = default);
     Task<LabValidationResult> ValidateLabAsync(Ulid attemptId, CancellationToken ct = default);
     Task StopLabAsync(Ulid attemptId, CancellationToken ct = default);
     Task CleanupExpiredLabsAsync(CancellationToken ct = default);
@@ -84,6 +87,7 @@ public record ContainerInfo
     public string Image { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
     public string State { get; init; } = string.Empty;
+    public string IpAddress { get; init; } = string.Empty;
     public Dictionary<string, string> Labels { get; init; } = new();
     public DateTimeOffset CreatedAt { get; init; }
 }

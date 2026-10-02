@@ -1,5 +1,9 @@
 namespace DevOpsPlatform.Api.Middleware;
 
+using DevOpsPlatform.Core.Entities;
+using DevOpsPlatform.Infrastructure.Data;
+using Microsoft.Extensions.Caching.Distributed;
+
 public class AuditLoggingMiddleware
 {
     private readonly RequestDelegate _next;

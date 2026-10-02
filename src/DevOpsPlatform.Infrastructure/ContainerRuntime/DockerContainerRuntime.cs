@@ -5,6 +5,9 @@ using DevOpsPlatform.Core.Interfaces;
 using DevOpsPlatform.Core.Models;
 using Docker.DotNet;
 using Docker.DotNet.Models;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using System.Globalization;
 using System.Text.Json;
 
 public class DockerContainerRuntime : IContainerRuntime
@@ -34,7 +37,7 @@ public class DockerContainerRuntime : IContainerRuntime
 
         var hostConfig = new HostConfig
         {
-            CpuCount = (long)Math.Ceiling(double.Parse(resourceLimits.Cpus)),
+            NanoCPUs = (long)(double.Parse(resourceLimits.Cpus, CultureInfo.InvariantCulture) * 1_000_000_000),
             Memory = ParseMemory(resourceLimits.Memory),
             PidsLimit = resourceLimits.Pids,
             AutoRemove = false,
@@ -116,7 +119,7 @@ public class DockerContainerRuntime : IContainerRuntime
 
     public async Task<ContainerExecResult> ExecAsync(string containerId, string[] command, CancellationToken ct = default)
     {
-        var execCreate = await _client.Exec.CreateContainerExecAsync(containerId, new ContainerExecCreateParameters
+        var execCreate = await _client.Exec.ExecCreateContainerAsync(containerId, new ContainerExecCreateParameters
         {
             AttachStdout = true,
             AttachStderr = true,
@@ -125,18 +128,24 @@ public class DockerContainerRuntime : IContainerRuntime
             Tty = false
         }, ct);
 
-        var execStart = await _client.Exec.StartContainerExecAsync(execCreate.ID, new ContainerExecStartParameters(), ct);
+        using var execStream = await _client.Exec.StartWithConfigContainerExecAsync(execCreate.ID, new ContainerExecStartParameters
+        {
+            AttachStdout = true,
+            AttachStderr = true,
+            Tty = false,
+            Detach = false
+        }, ct);
 
         // Read output
-        var stdout = new MemoryStream();
-        var stderr = new MemoryStream();
-        await _client.Exec.StartAndWaitAsync(execCreate.ID, false, stdout, stderr, ct);
+        using var stdout = new MemoryStream();
+        using var stderr = new MemoryStream();
+        await execStream.CopyOutputToAsync(Stream.Null, stdout, stderr, ct);
 
         var inspect = await _client.Exec.InspectContainerExecAsync(execCreate.ID, ct);
 
         return new ContainerExecResult
         {
-            ExitCode = inspect.ExitCode ?? -1,
+            ExitCode = (int)inspect.ExitCode,
             Stdout = System.Text.Encoding.UTF8.GetString(stdout.ToArray()),
             Stderr = System.Text.Encoding.UTF8.GetString(stderr.ToArray())
         };
@@ -149,16 +158,15 @@ public class DockerContainerRuntime : IContainerRuntime
             Stream = true,
             Stdin = true,
             Stdout = true,
-            Stderr = true,
-            Tty = true
+            Stderr = true
         };
 
-        var stream = await _client.Containers.AttachContainerAsync(containerId, attachParams, ct);
-        
+        var stream = await _client.Containers.AttachContainerAsync(containerId, true, attachParams, ct);
+
         // Resize terminal
-        await _client.Containers.ResizeContainerTTYAsync(containerId, new ContainerResizeParameters { Height = (ushort)rows, Width = (ushort)cols }, ct);
-        
-        return stream;
+        await _client.Containers.ResizeContainerTtyAsync(containerId, new ContainerResizeParameters { Height = rows, Width = cols }, ct);
+
+        return new MultiplexedStreamAdapter(stream);
     }
 
     public async Task<ContainerInfo?> GetContainerInfoAsync(string containerId, CancellationToken ct = default)
@@ -172,9 +180,11 @@ public class DockerContainerRuntime : IContainerRuntime
                 Name = container.Name.TrimStart('/'),
                 Image = container.Config?.Image ?? "",
                 Status = container.State?.Status ?? "",
-                State = container.State?.StateString ?? "",
-                Labels = container.Config?.Labels ?? new(),
-                CreatedAt = DateTimeOffset.Parse(container.Created)
+                State = container.State?.Running == true ? "running" : container.State?.Status ?? "",
+                IpAddress = container.NetworkSettings?.Networks?.Values.FirstOrDefault()?.IPAddress
+                    ?? container.NetworkSettings?.IPAddress ?? "",
+                Labels = container.Config?.Labels != null ? new Dictionary<string, string>(container.Config.Labels) : new(),
+                CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(container.Created, DateTimeKind.Utc))
             };
         }
         catch
@@ -199,13 +209,13 @@ public class DockerContainerRuntime : IContainerRuntime
 
         return containers.Select(c => new ContainerInfo
         {
-            Id = c.ID,
-            Name = c.Names.FirstOrDefault()?.TrimStart('/') ?? "",
-            Image = c.Image,
-            Status = c.Status,
-            State = c.State,
-            Labels = c.Labels,
-            CreatedAt = DateTimeOffset.FromUnixTimeSeconds(c.Created)
+            Id = c.ID ?? "",
+            Name = c.Names?.FirstOrDefault()?.TrimStart('/') ?? "",
+            Image = c.Image ?? "",
+            Status = c.Status ?? "",
+            State = c.State ?? "",
+            Labels = c.Labels != null ? new Dictionary<string, string>(c.Labels) : new(),
+            CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(c.Created, DateTimeKind.Utc))
         }).ToList();
     }
 
@@ -225,5 +235,56 @@ public class DockerContainerRuntime : IContainerRuntime
         public int Pids { get; init; } = 100;
         public int TimeoutSeconds { get; init; } = 1800;
         public bool UseGVisor { get; init; } = true;
+    }
+
+    /// <summary>
+    /// Adapta MultiplexedStream (no es un Stream) a System.IO.Stream para la terminal interactiva.
+    /// </summary>
+    private sealed class MultiplexedStreamAdapter : Stream
+    {
+        private readonly MultiplexedStream _inner;
+
+        public MultiplexedStreamAdapter(MultiplexedStream inner) => _inner = inner;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+            => ReadAsync(buffer, offset, count).GetAwaiter().GetResult();
+
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct)
+        {
+            var result = await _inner.ReadOutputAsync(buffer, offset, count, ct).ConfigureAwait(false);
+            return result.EOF ? 0 : result.Count;
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+            => _inner.WriteAsync(buffer, offset, count, CancellationToken.None).GetAwaiter().GetResult();
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct)
+            => _inner.WriteAsync(buffer, offset, count, ct);
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+            base.Dispose(disposing);
+        }
     }
 }

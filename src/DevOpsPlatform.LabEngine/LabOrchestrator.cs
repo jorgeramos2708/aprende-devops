@@ -9,9 +9,8 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using StackExchangeRedis;
+using StackExchange.Redis;
 using System.Text.Json;
-using Ulid;
 
 public class LabOrchestrator : ILabOrchestrator
 {
@@ -19,7 +18,6 @@ public class LabOrchestrator : ILabOrchestrator
     private readonly IContainerRuntime _containerRuntime;
     private readonly IConnectionMultiplexer _redis;
     private readonly ILogger<LabOrchestrator> _logger;
-    private readonly IHubContext<TerminalHub> _terminalHub;
     private readonly IServiceProvider _services;
 
     public LabOrchestrator(
@@ -27,14 +25,12 @@ public class LabOrchestrator : ILabOrchestrator
         IContainerRuntime containerRuntime,
         IConnectionMultiplexer redis,
         ILogger<LabOrchestrator> logger,
-        IHubContext<TerminalHub> terminalHub,
         IServiceProvider services)
     {
         _db = db;
         _containerRuntime = containerRuntime;
         _redis = redis;
         _logger = logger;
-        _terminalHub = terminalHub;
         _services = services;
     }
 
@@ -109,7 +105,7 @@ public class LabOrchestrator : ILabOrchestrator
             {
                 AttemptId = attempt.Id,
                 ContainerId = containerId,
-                ContainerIp = containerInfo?.NetworkSettings?.IPAddress ?? "",
+                ContainerIp = containerInfo?.IpAddress ?? "",
                 TerminalPort = 0, // WebSocket port handled by SignalR
                 ExpiresAt = attempt.ExpiresAt.Value,
                 Status = LabStatus.Running
@@ -138,7 +134,7 @@ public class LabOrchestrator : ILabOrchestrator
         {
             AttemptId = attempt.Id,
             ContainerId = attempt.ContainerId!,
-            ContainerIp = containerInfo?.NetworkSettings?.IPAddress ?? "",
+            ContainerIp = containerInfo?.IpAddress ?? "",
             TerminalPort = 0,
             ExpiresAt = attempt.ExpiresAt ?? DateTimeOffset.UtcNow.AddMinutes(30),
             Status = LabStatus.Running
@@ -161,7 +157,7 @@ public class LabOrchestrator : ILabOrchestrator
         {
             AttemptId = attempt.Id,
             ContainerId = attempt.ContainerId ?? "",
-            ContainerIp = containerInfo?.NetworkSettings?.IPAddress ?? "",
+            ContainerIp = containerInfo?.IpAddress ?? "",
             TerminalPort = 0,
             ExpiresAt = attempt.ExpiresAt ?? DateTimeOffset.UtcNow,
             Status = attempt.Status
@@ -192,16 +188,16 @@ public class LabOrchestrator : ILabOrchestrator
         };
     }
 
-    public async Task SendTerminalInputAsync(Ulid attemptId, string input)
+    public async Task SendTerminalInputAsync(Ulid attemptId, string input, CancellationToken ct = default)
     {
-        var attempt = await _db.LabAttempts.FindAsync([attemptId]);
+        var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
         if (attempt?.ContainerId == null) return;
 
         // Write to container stdin via Docker attach
         // This is a simplified version - in production you'd maintain a persistent attach stream
         try
         {
-            await _containerRuntime.ExecAsync(attempt.ContainerId, new[] { "sh", "-c", $"echo '{input.Replace("'", "'\''")}' > /dev/tty" });
+            await _containerRuntime.ExecAsync(attempt.ContainerId, new[] { "sh", "-c", $"echo '{input.Replace("'", "'\''")}' > /dev/tty" }, ct);
         }
         catch (Exception ex)
         {
@@ -209,12 +205,12 @@ public class LabOrchestrator : ILabOrchestrator
         }
     }
 
-    public async Task ResizeTerminalAsync(Ulid attemptId, int cols, int rows)
+    public async Task ResizeTerminalAsync(Ulid attemptId, int cols, int rows, CancellationToken ct = default)
     {
-        var attempt = await _db.LabAttempts.FindAsync([attemptId]);
+        var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
         if (attempt?.ContainerId == null) return;
 
-        await _containerRuntime.ExecAsync(attempt.ContainerId, new[] { "sh", "-c", $"resize -s {rows} {cols}" });
+        await _containerRuntime.ExecAsync(attempt.ContainerId, new[] { "sh", "-c", $"resize -s {rows} {cols}" }, ct);
     }
 
     public async Task<LabValidationResult> ValidateLabAsync(Ulid attemptId, CancellationToken ct = default)
@@ -232,7 +228,7 @@ public class LabOrchestrator : ILabOrchestrator
             { 
                 Passed = true, 
                 Score = 100, 
-                Details = JsonDocument.Parse("{"message": "No validation script defined"}") 
+                Details = JsonDocument.Parse("{\"message\": \"No validation script defined\"}") 
             };
         }
 
@@ -371,8 +367,7 @@ public class LabOrchestrator : ILabOrchestrator
 
     private static string[] ExtractWarnings(string stderr)
     {
-        return stderr.Split('
-', StringSplitOptions.RemoveEmptyEntries)
+        return stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Where(l => l.Contains("WARN", StringComparison.OrdinalIgnoreCase) || l.Contains("warning", StringComparison.OrdinalIgnoreCase))
             .Select(l => l.Trim())
             .ToArray();

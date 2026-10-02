@@ -4,11 +4,12 @@ using DevOpsPlatform.Core.Interfaces;
 using DevOpsPlatform.Core.Models;
 using Markdig;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Minio;
 using Minio.DataModel.Args;
 using StackExchange.Redis;
 using System.Text.Json;
-using Ulid;
 
 public class RedisCacheService : IDistributedCache
 {
@@ -25,8 +26,8 @@ public class RedisCacheService : IDistributedCache
     public async Task<byte[]?> GetAsync(string key, CancellationToken token = default) => await _db.StringGetAsync(key);
     public void Set(string key, byte[] value, DistributedCacheEntryOptions options) => _db.StringSet(key, value, options.AbsoluteExpirationRelativeToNow ?? TimeSpan.FromHours(1));
     public async Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default) => await _db.StringSetAsync(key, value, options.AbsoluteExpirationRelativeToNow ?? TimeSpan.FromHours(1));
-    public void Refresh(string key) => _db.KeyExpire(key, TimeSpan.FromHours(1), ExpiryMode.Sliding);
-    public async Task RefreshAsync(string key, CancellationToken token = default) => await _db.KeyExpireAsync(key, TimeSpan.FromHours(1), ExpiryMode.Sliding);
+    public void Refresh(string key) => _db.KeyExpire(key, TimeSpan.FromHours(1));
+    public async Task RefreshAsync(string key, CancellationToken token = default) => await _db.KeyExpireAsync(key, TimeSpan.FromHours(1));
     public void Remove(string key) => _db.KeyDelete(key);
     public async Task RemoveAsync(string key, CancellationToken token = default) => await _db.KeyDeleteAsync(key);
 }
@@ -141,8 +142,7 @@ public class MarkdownRenderingService
         var contentBuilder = new System.Text.StringBuilder();
         bool inFrontMatter = false;
 
-        foreach (var line in markdown.Split('
-'))
+        foreach (var line in markdown.Split('\n'))
         {
             if (line.Trim() == "---")
             {

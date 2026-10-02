@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\DevOpsPlatform.Core\DevOpsPlatform.Core.csproj" />
@@ -8,7 +10,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
     <PackageReference Include="Docker.DotNet" Version="3.125.5" />
-    <PackageReference Include="StackExchangeRedis" Version="2.7.33" />
+    <PackageReference Include="StackExchange.Redis" Version="2.7.33" />
     <PackageReference Include="System.Text.Json" Version="9.0.0" />
   </ItemGroup>
 </Project>

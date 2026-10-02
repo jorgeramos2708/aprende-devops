@@ -3,6 +3,7 @@ namespace DevOpsPlatform.Api.Hubs;
 using DevOpsPlatform.Core.Interfaces;
 using DevOpsPlatform.Core.Models;
 using Microsoft.AspNetCore.SignalR;
+using StackExchange.Redis;
 using System.Text.Json;
 
 public class TerminalHub : Hub

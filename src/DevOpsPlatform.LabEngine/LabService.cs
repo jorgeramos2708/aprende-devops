@@ -5,7 +5,7 @@ using DevOpsPlatform.Core.Enums;
 using DevOpsPlatform.Core.Models;
 using DevOpsPlatform.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using Ulid;
+using System.Text.Json;
 
 public interface ILabService
 {

@@ -1,6 +1,8 @@
 namespace DevOpsPlatform.LabEngine;
 
 using DevOpsPlatform.Core.Interfaces;
+using DevOpsPlatform.Core.Models;
+using System.Linq;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Hosting;
@@ -35,7 +37,7 @@ public class TerminalStreamManager : BackgroundService
         _sessions[attemptId] = session;
 
         // Start the Docker attach loop
-        _ = Task.Run(() => RunAttachLoopAsync(session, ct), ct);
+        session.AttachTask = Task.Run(() => RunAttachLoopAsync(session, ct), ct);
 
         return session;
     }
@@ -75,7 +77,13 @@ public class TerminalStreamManager : BackgroundService
         {
             return session.OutputChannel.Reader.ReadAllAsync(ct);
         }
-        return AsyncEnumerable.Empty<TerminalOutput>();
+        return EmptyOutput();
+    }
+
+    private static async IAsyncEnumerable<TerminalOutput> EmptyOutput()
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        yield break;
     }
 
     private async Task RunAttachLoopAsync(TerminalSession session, CancellationToken ct)
@@ -86,31 +94,35 @@ public class TerminalStreamManager : BackgroundService
                 session.ContainerId, session.Cols, session.Rows, ct);
 
             var buffer = new byte[4096];
-            var inputTask = session.InputChannel.Reader.ReadAsync(session.CancellationTokenSource.Token);
+            var token = session.CancellationTokenSource.Token;
+            var readTask = stream.ReadAsync(buffer, 0, buffer.Length, token);
+            var inputTask = session.InputChannel.Reader.ReadAsync(token).AsTask();
 
-            while (!session.CancellationTokenSource.Token.IsCancellationRequested)
+            while (!token.IsCancellationRequested)
             {
-                var readTask = stream.ReadAsync(buffer, 0, buffer.Length, session.CancellationTokenSource.Token);
-                var completedTask = await Task.WhenAny(readTask.AsTask(), inputTask.AsTask());
+                var completedTask = await Task.WhenAny(readTask, inputTask);
 
-                if (completedTask == readTask.AsTask())
+                if (completedTask == readTask)
                 {
-                    var bytesRead = readTask.Result;
+                    var bytesRead = await readTask;
                     if (bytesRead == 0) break; // EOF
 
                     var output = System.Text.Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    await session.OutputChannel.Writer.WriteAsync(new TerminalOutput { Data = output });
+                    await session.OutputChannel.Writer.WriteAsync(new TerminalOutput { Data = output }, token);
+                    if (token.IsCancellationRequested) break;
+                    readTask = stream.ReadAsync(buffer, 0, buffer.Length, token);
                 }
                 else
                 {
-                    var input = inputTask.Result;
-                    if (session.CancellationTokenSource.Token.IsCancellationRequested) break;
+                    var input = await inputTask;
+                    if (token.IsCancellationRequested) break;
 
                     // Write input to container stdin
-                    await stream.WriteAsync(System.Text.Encoding.UTF8.GetBytes(input), 0, input.Length, session.CancellationTokenSource.Token);
-                    await stream.FlushAsync(session.CancellationTokenSource.Token);
-                    
-                    inputTask = session.InputChannel.Reader.ReadAsync(session.CancellationTokenSource.Token);
+                    var inputBytes = System.Text.Encoding.UTF8.GetBytes(input);
+                    await stream.WriteAsync(inputBytes, 0, inputBytes.Length, token);
+                    await stream.FlushAsync(token);
+
+                    inputTask = session.InputChannel.Reader.ReadAsync(token).AsTask();
                 }
             }
         }
@@ -121,12 +133,10 @@ public class TerminalStreamManager : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Terminal attach loop failed for attempt {AttemptId}", session.AttemptId);
-            await session.OutputChannel.Writer.WriteAsync(new TerminalOutput 
-            { 
-                Data = $"
-[Connection lost: {ex.Message}]
-", 
-                IsError = true 
+            await session.OutputChannel.Writer.WriteAsync(new TerminalOutput
+            {
+                Data = $"[Connection lost: {ex.Message}]",
+                IsError = true
             });
         }
         finally
@@ -141,7 +151,7 @@ public class TerminalStreamManager : BackgroundService
         return Task.CompletedTask;
     }
 
-    private class TerminalSession
+    public class TerminalSession
     {
         public Ulid AttemptId { get; set; }
         public string ContainerId { get; set; } = string.Empty;

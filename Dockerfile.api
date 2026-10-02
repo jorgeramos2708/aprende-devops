@@ -7,7 +7,7 @@ COPY src/DevOpsPlatform.Infrastructure/DevOpsPlatform.Infrastructure.csproj src/
 COPY src/DevOpsPlatform.LabEngine/DevOpsPlatform.LabEngine.csproj src/DevOpsPlatform.LabEngine/
 RUN dotnet restore src/DevOpsPlatform.Api/DevOpsPlatform.Api.csproj
 COPY src/ ./src/
-WORKDIR /src/DevOpsPlatform.Api
+WORKDIR /src/src/DevOpsPlatform.Api
 RUN dotnet publish DevOpsPlatform.Api.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime

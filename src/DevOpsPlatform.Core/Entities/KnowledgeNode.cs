@@ -1,8 +1,8 @@
 namespace DevOpsPlatform.Core.Entities;
 
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using DevOpsPlatform.Core.Enums;
-using Ulid;
 
 public abstract record Entity<TId> where TId : notnull
 {
@@ -40,18 +40,18 @@ public record KnowledgeEdge
 
 public record LabEnvironment : Entity<Ulid>
 {
-    public string Name { get; init; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
     public string Slug { get; init; } = string.Empty;
-    public string? Description { get; init; }
-    public LabType LabType { get; init; }
-    public string BaseImage { get; init; } = string.Empty;
-    public string? DockerCompose { get; init; }
-    public JsonDocument ResourceLimits { get; init; } = JsonDocument.Parse("{}");
-    public string? ValidationScript { get; init; }
-    public string? SetupScript { get; init; }
-    public string? CleanupScript { get; init; }
-    public JsonDocument Metadata { get; init; } = JsonDocument.Parse("{}");
-    public bool IsActive { get; init; } = true;
+    public string? Description { get; set; }
+    public LabType LabType { get; set; }
+    public string BaseImage { get; set; } = string.Empty;
+    public string? DockerCompose { get; set; }
+    public JsonDocument ResourceLimits { get; set; } = JsonDocument.Parse("{}");
+    public string? ValidationScript { get; set; }
+    public string? SetupScript { get; set; }
+    public string? CleanupScript { get; set; }
+    public JsonDocument Metadata { get; set; } = JsonDocument.Parse("{}");
+    public bool IsActive { get; set; } = true;
     public ICollection<LabAttempt> Attempts { get; init; } = new List<LabAttempt>();
 }
 
@@ -59,15 +59,15 @@ public record LabAttempt : Entity<Ulid>
 {
     public Ulid UserId { get; init; }
     public Ulid LabEnvironmentId { get; init; }
-    public LabStatus Status { get; init; } = LabStatus.Pending;
-    public string? ContainerId { get; init; }
+    public LabStatus Status { get; set; } = LabStatus.Pending;
+    public string? ContainerId { get; set; }
     public string? ContainerIp { get; init; }
     public DateTimeOffset? StartedAt { get; init; }
-    public DateTimeOffset? CompletedAt { get; init; }
+    public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; init; }
-    public decimal? Score { get; init; }
-    public JsonDocument? Evidence { get; init; }
-    public JsonDocument? ValidationResult { get; init; }
+    public decimal? Score { get; set; }
+    public JsonDocument? Evidence { get; set; }
+    public JsonDocument? ValidationResult { get; set; }
     public JsonDocument Metadata { get; init; } = JsonDocument.Parse("{}");
     public LabEnvironment LabEnvironment { get; init; } = null!;
 }

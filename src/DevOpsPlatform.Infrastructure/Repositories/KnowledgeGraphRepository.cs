@@ -6,7 +6,6 @@ using DevOpsPlatform.Core.Interfaces;
 using DevOpsPlatform.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
-using Ulid;
 
 public class KnowledgeGraphRepository : IKnowledgeGraphRepository
 {

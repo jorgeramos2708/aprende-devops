@@ -1,7 +1,11 @@
 using DevOpsPlatform.Api.Hubs;
 using DevOpsPlatform.Api.Middleware;
+using DevOpsPlatform.Core.Interfaces;
+using DevOpsPlatform.Core.Models;
 using DevOpsPlatform.Infrastructure.Data;
 using DevOpsPlatform.Infrastructure.Services;
+using DevOpsPlatform.LabEngine;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Validation.AspNetCore;
 using Serilog;
@@ -156,21 +160,19 @@ app.MapHealthChecks("/health");
 // API Routes
 var api = app.MapGroup("/api").RequireAuthorization();
 
-// Auth endpoints (public)
-var auth = app.MapGroup("/api/auth").AllowAnonymous();
-auth.MapPost("/register", async (HttpContext ctx, RegisterRequest req, UserManager<IdentityUser> userManager) => { /* ... */ });
-auth.MapPost("/login", async (HttpContext ctx, LoginRequest req, SignInManager<IdentityUser> signInManager, ITokenService tokenService) => { /* ... */ });
-auth.MapPost("/refresh", async (HttpContext ctx, RefreshRequest req, ITokenService tokenService) => { /* ... */ });
+// TODO(auth): reintroducir cuando existan Identity + ITokenService.
+// Los endpoints /api/auth/register, /api/auth/login y /api/auth/refresh
+// requieren UserManager<IdentityUser>, SignInManager<IdentityUser> e ITokenService,
+// aun no implementados (ver DTOs RegisterRequest/LoginRequest/RefreshRequest al final).
 
-// Learning Engine
+// Learning Engine (solo lectura: lo que IKnowledgeGraphRepository soporta hoy)
 var learning = api.MapGroup("/learning");
 learning.MapGet("/technologies", async (IKnowledgeGraphRepository repo) => { /* ... */ });
 learning.MapGet("/technologies/{slug}", async (string slug, IKnowledgeGraphRepository repo) => { /* ... */ });
 learning.MapGet("/nodes/{id}", async (Ulid id, IKnowledgeGraphRepository repo) => { /* ... */ });
 learning.MapGet("/nodes/{id}/children", async (Ulid id, IKnowledgeGraphRepository repo) => { /* ... */ });
 learning.MapGet("/roadmap", async (IKnowledgeGraphRepository repo) => { /* ... */ });
-learning.MapPost("/progress", async (ProgressUpdateRequest req, HttpContext ctx, IProgressService progress) => { /* ... */ });
-learning.MapGet("/progress", async (HttpContext ctx, IProgressService progress) => { /* ... */ });
+// TODO(progress): POST /progress y GET /progress requieren IProgressService (no existe aun).
 
 // Lab Engine
 var labs = api.MapGroup("/labs");
@@ -181,33 +183,13 @@ labs.MapPost("/{attemptId}/stop", async (Ulid attemptId, ILabOrchestrator orches
 labs.MapPost("/{attemptId}/validate", async (Ulid attemptId, ILabOrchestrator orchestrator) => { /* ... */ });
 labs.MapGet("/{attemptId}/terminal/token", async (Ulid attemptId, ILabOrchestrator orchestrator) => { /* ... */ });
 
-// Assessment Engine
-var assessment = api.MapGroup("/assessment");
-assessment.MapGet("/exams", async (IExamService examService) => { /* ... */ });
-assessment.MapGet("/exams/{id}", async (Ulid id, IExamService examService) => { /* ... */ });
-assessment.MapPost("/exams/start", async (ExamStartRequest req, HttpContext ctx, IExamService examService) => { /* ... */ });
-assessment.MapPost("/exams/submit", async (ExamSubmitRequest req, HttpContext ctx, IExamService examService) => { /* ... */ });
-assessment.MapGet("/exams/{attemptId}/result", async (Ulid attemptId, IExamService examService) => { /* ... */ });
-
-// Certification Engine
-var cert = api.MapGroup("/certifications");
-cert.MapGet("/", async (ICertificationService certService) => { /* ... */ });
-cert.MapGet("/{id}/readiness", async (Ulid id, HttpContext ctx, ICertificationService certService) => { /* ... */ });
-
-// Insights
-var insights = api.MapGroup("/insights");
-insights.MapGet("/", async (HttpContext ctx, IInsightService insightService) => { /* ... */ });
-insights.MapPost("/{id}/read", async (Ulid id, IInsightService insightService) => { /* ... */ });
-insights.MapPost("/{id}/dismiss", async (Ulid id, IInsightService insightService) => { /* ... */ });
+// TODO(assessment): /api/assessment requiere IExamService + DTOs ExamStartRequest/ExamSubmitRequest (no existen aun).
+// TODO(certifications): /api/certifications requiere ICertificationService (no existe aun).
+// TODO(insights): /api/insights requiere IInsightService (no existe aun).
 
 // Admin
-var admin = api.MapGroup("/admin").RequireAuthorization("AdminOnly");
-admin.MapGet("/tech-changes", async (ITechWatcherService watcher) => { /* ... */ });
-admin.MapPost("/tech-changes/check", async (ITechWatcherService watcher) => { /* ... */ });
-admin.MapGet("/impact-assessments", async (IImpactService impact) => { /* ... */ });
-admin.MapPost("/update-proposals", async (CreateUpdateProposalRequest req, IUpdateService update) => { /* ... */ });
-admin.MapPost("/update-proposals/{id}/approve", async (Ulid id, IUpdateService update) => { /* ... */ });
-admin.MapPost("/lab-regression/run", async (RunRegressionRequest req, IRegressionService regression) => { /* ... */ });
+// TODO(admin): /api/admin requiere ITechWatcherService, IImpactService, IUpdateService,
+// CreateUpdateProposalRequest, RunRegressionRequest e IRegressionService (no existen aun).
 
 // Migrate database on startup
 using (var scope = app.Services.CreateScope())
