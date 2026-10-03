@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { useLocation, Navigate } from 'react-router-dom'
 import { api } from './api'
 
 interface User {
@@ -29,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const token = localStorage.getItem('access_token')
       if (token) {
         try {
-          const res = await api.get('/api/auth/me')
+          const res = await api.get('/auth/me')
           setUser(res.data)
         } catch {
           localStorage.removeItem('access_token')
@@ -42,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (email: string, password: string) => {
-    const res = await api.post('/api/auth/login', { email, password })
+    const res = await api.post('/auth/login', { email, password })
     const { accessToken, refreshToken, user: userData } = res.data
     localStorage.setItem('access_token', accessToken)
     localStorage.setItem('refresh_token', refreshToken)
@@ -51,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const register = async (email: string, password: string, displayName: string) => {
-    const res = await api.post('/api/auth/register', { email, password, displayName })
+    const res = await api.post('/auth/register', { email, password, displayName })
     const { accessToken, refreshToken, user: userData } = res.data
     localStorage.setItem('access_token', accessToken)
     localStorage.setItem('refresh_token', refreshToken)
@@ -70,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const refresh = localStorage.getItem('refresh_token')
     if (!refresh) return
     try {
-      const res = await api.post('/api/auth/refresh', { refreshToken: refresh })
+      const res = await api.post('/auth/refresh', { refreshToken: refresh })
       const { accessToken } = res.data
       localStorage.setItem('access_token', accessToken)
       api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`

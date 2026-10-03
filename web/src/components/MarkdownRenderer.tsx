@@ -1,37 +1,38 @@
-import React from 'react'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.min.css'
-import { Mermaid } from './Mermaid'
+import clsx from 'clsx'
 
-const md = new MarkdownIt({
+const md: MarkdownIt = new MarkdownIt({
   html: true,
   linkify: true,
   typographer: true,
-  highlight: (str, lang) => {
+  highlight: (str: string, lang: string): string => {
     if (lang && hljs.getLanguage(lang)) {
       try {
         return `<pre class="hljs"><code>${hljs.highlight(str, { language: lang, ignoreIllegals: true }).value}</code></pre>`
-      } catch (__) {}
+      } catch {
+        // cae al resaltado plano de abajo
+      }
     }
     return `<pre class="hljs"><code>${md.utils.escapeHtml(str)}</code></pre>`
   },
 })
 
-// Custom renderers for admonitions, tabs, etc.
-const defaultRender = md.renderer.rules.fence || function(tokens, idx, options, env, self) {
+// Renderers personalizados para admonitions, tabs, etc.
+const defaultRender = md.renderer.rules.fence ?? ((tokens, idx, options, _env, self) => {
   return self.renderToken(tokens, idx, options)
-}
+})
 
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
   const info = token.info.trim()
-  
-  // Mermaid diagrams
+
+  // Diagramas mermaid
   if (info === 'mermaid') {
     return `<div class="mermaid">${token.content}</div>`
   }
-  
+
   // Admonitions: ::: note, ::: warning, ::: danger, ::: tip
   if (info.startsWith('note') || info.startsWith('warning') || info.startsWith('danger') || info.startsWith('tip')) {
     const type = info.split(' ')[0]
@@ -56,7 +57,11 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   return defaultRender(tokens, idx, options, env, self)
 }
 
-// Task list items
+// Items de lista de tareas
+const defaultListItem = md.renderer.rules.listitem ?? ((tokens, idx, options, _env, self) => {
+  return self.renderToken(tokens, idx, options)
+})
+
 md.renderer.rules.listitem = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
   if (token.children) {
@@ -66,20 +71,18 @@ md.renderer.rules.listitem = (tokens, idx, options, env, self) => {
       if (text.startsWith('[ ] ') || text.startsWith('[x] ') || text.startsWith('[X] ')) {
         const checked = text[1] === 'x' || text[1] === 'X'
         const content = text.slice(3)
-        firstChild.children[0].content = content
+        firstChild.children![0].content = content
         return `<li class="task-list-item"><input type="checkbox" ${checked ? 'checked' : ''} disabled /> ${self.renderToken(tokens, idx, options)}</li>`
       }
     }
   }
-  return md.renderer.rules.listitem!(tokens, idx, options, env, self)
+  return defaultListItem(tokens, idx, options, env, self)
 }
 
 export function MarkdownRenderer({ content, className }: { content: string; className?: string }) {
   const html = md.render(content)
-  
+
   return (
     <div className={clsx('prose-content', className)} dangerouslySetInnerHTML={{ __html: html }} />
   )
 }
-
-import clsx from 'clsx'

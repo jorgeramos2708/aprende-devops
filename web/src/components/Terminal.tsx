@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Terminal } from 'xterm'
+import { Terminal as XTerm } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { WebLinksAddon } from 'xterm-addon-web-links'
 import { SearchAddon } from 'xterm-addon-search'
-import { X, Maximize2, Minimize2, Copy, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
-import { useAuth } from '../../lib/auth'
+import { Maximize2, Minimize2, Copy, AlertCircle, Loader2 } from 'lucide-react'
 import clsx from 'clsx'
 
 interface TerminalProps {
@@ -16,10 +15,9 @@ interface TerminalProps {
   onError?: (error: string) => void
 }
 
-export function Terminal({ attemptId, cols = 120, rows = 30, onConnect, onDisconnect, onError }: TerminalProps) {
-  const { user } = useAuth()
+export function Terminal({ attemptId, onConnect, onDisconnect, onError }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const termRef = useRef<Terminal | null>(null)
+  const termRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon>(new FitAddon())
   const websocketRef = useRef<WebSocket | null>(null)
   const [connected, setConnected] = useState(false)
@@ -47,7 +45,7 @@ export function Terminal({ attemptId, cols = 120, rows = 30, onConnect, onDiscon
       websocketRef.current = new WebSocket(wsUrl)
       const ws = websocketRef.current
 
-      const term = new Terminal({
+      const term = new XTerm({
         cursorBlink: true,
         fontSize: 14,
         fontFamily: 'JetBrains Mono, Fira Code, monospace',
@@ -105,11 +103,7 @@ export function Terminal({ attemptId, cols = 120, rows = 30, onConnect, onDiscon
           if (data.type === 'output') {
             term.write(data.data)
           } else if (data.type === 'error') {
-            term.write(`
-
-[31m[Error: ${data.message}][0m
-
-`)
+            term.write(`\r\n\x1b[31m[Error: ${data.message}]\x1b[0m\r\n`)
           }
         } catch {
           // Raw text output
@@ -123,13 +117,13 @@ export function Terminal({ attemptId, cols = 120, rows = 30, onConnect, onDiscon
         term.write('\r\n\x1b[33m[Conexión cerrada]\x1b[0m\r\n')
       }
 
-      ws.onerror = (err) => {
+      ws.onerror = () => {
         setError('Error de conexión WebSocket')
         onError?.('WebSocket error')
       }
 
       // Handle terminal input
-      term.onData((data) => {
+      term.onData((data: string) => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'input', data }))
         }

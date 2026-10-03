@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { Menu, X, ChevronDown, ChevronRight, Home, BookOpen, Terminal, Trophy, Award, Lightbulb, User, Settings, Shield, GitBranch, Bug, FlaskConical } from 'lucide-react'
+import { Menu, ChevronDown, Home, BookOpen, Terminal, Trophy, Award, Lightbulb, User, Settings, Shield, GitBranch, Bug, FlaskConical } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { useState } from 'react'
 import clsx from 'clsx'

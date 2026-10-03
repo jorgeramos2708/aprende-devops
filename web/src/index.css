@@ -69,7 +69,7 @@
   .badge-dark { @apply badge bg-dark-100 text-dark-800; }
   
   .prose-content {
-    @apply prose prose-dark max-w-none;
+    @apply max-w-none;
   }
   
   .prose-content h1 { @apply text-3xl font-bold text-dark-900 mb-4 mt-8; }

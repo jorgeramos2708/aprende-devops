@@ -9,6 +9,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Validation.AspNetCore;
 using Serilog;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -129,10 +130,19 @@ builder.Services.AddCors(options =>
 // MediatR
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<Program>());
 
+// Health
+builder.Services.AddHealthChecks();
+
+// Redis: multiplexer compartido por hubs y orquestador de labs
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+    ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379"));
+
 // Custom services
 builder.Services.AddScoped<DevOpsPlatform.Core.Interfaces.IKnowledgeGraphRepository, DevOpsPlatform.Infrastructure.Repositories.KnowledgeGraphRepository>();
 builder.Services.AddScoped<DevOpsPlatform.Core.Interfaces.IContainerRuntime, DevOpsPlatform.Infrastructure.ContainerRuntime.DockerContainerRuntime>();
 builder.Services.AddScoped<DevOpsPlatform.Core.Interfaces.ILabOrchestrator, DevOpsPlatform.LabEngine.LabOrchestrator>();
+builder.Services.AddScoped<DevOpsPlatform.LabEngine.ILabService, DevOpsPlatform.LabEngine.LabService>();
+builder.Services.AddHostedService<DevOpsPlatform.LabEngine.TerminalStreamManager>();
 builder.Services.AddSingleton<DevOpsPlatform.Infrastructure.Services.MarkdownRenderingService>();
 builder.Services.AddSingleton<DevOpsPlatform.Infrastructure.Services.MinioStorageService>();
 builder.Services.AddSingleton<DevOpsPlatform.Infrastructure.Services.YamlContentService>();
