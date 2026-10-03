@@ -136,7 +136,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./src/DevOpsPlatform.Api/Dockerfile
+          file: ./Dockerfile.api
           push: true
           tags: ${{ steps.meta-api.outputs.tags }}
           labels: ${{ steps.meta-api.outputs.labels }}
@@ -157,10 +157,52 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./web/Dockerfile
+          file: ./Dockerfile.web
           push: true
           tags: ${{ steps.meta-web.outputs.tags }}
           labels: ${{ steps.meta-web.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata for Workers
+        id: meta-workers
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/workers
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Workers
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.workers
+          push: true
+          tags: ${{ steps.meta-workers.outputs.tags }}
+          labels: ${{ steps.meta-workers.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata for TechWatcher
+        id: meta-watcher
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/techwatcher
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push TechWatcher
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.techwatcher
+          push: true
+          tags: ${{ steps.meta-watcher.outputs.tags }}
+          labels: ${{ steps.meta-watcher.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -185,21 +227,18 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
             cd /opt/devops-platform
-            
+
             # Pull latest images
-            docker compose -f docker-compose.prod.yml pull
-            
-            # Run database migrations
-            docker compose -f docker-compose.prod.yml run --rm api dotnet DevOpsPlatform.Api.dll migrate
-            
-            # Restart services
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            
+            docker compose -f infra/docker-compose/docker-compose.prod.yml pull
+
+            # Restart services (el API crea el esquema con EnsureCreated al arrancar)
+            docker compose -f infra/docker-compose/docker-compose.prod.yml up -d --remove-orphans
+
             # Clean up old images
             docker image prune -f
           EOF
-      
+
       - name: Health check
         run: |
           sleep 30
-          curl -f https://learn.edrs.xyz/health || exit 1
+          curl -f https://aprende-devops.edrs.xyz/health || exit 1

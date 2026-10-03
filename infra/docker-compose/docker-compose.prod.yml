@@ -36,7 +36,10 @@ services:
       - MinIO__SecretKey=${MINIO_ROOT_PASSWORD}
       - MinIO__Bucket=devops-platform
       - OpenIddict__Authority=http://api:8080
-      - AllowedOrigins__0=https://learn.edrs.xyz
+      - Jwt__Key=${JWT_KEY}
+      - Jwt__Issuer=devops-platform
+      - Jwt__Audience=devops-platform
+      - AllowedOrigins__0=https://aprende-devops.edrs.xyz
       - AllowedOrigins__1=http://localhost:5173
     volumes:
       - app-data:/app/data
@@ -215,6 +218,57 @@ services:
       - loki
       - prometheus
       - tempo
+
+  # ----------------------------------------------------------
+  # WORKERS (Hangfire: limpieza, insights, regresiones)
+  # ----------------------------------------------------------
+  workers:
+    image: devops-platform/workers:latest
+    container_name: platform-workers
+    restart: unless-stopped
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+      - ConnectionStrings__Default=Host=postgres;Database=devops_platform;Username=postgres;Password=${POSTGRES_PASSWORD}
+      - ConnectionStrings__Redis=redis:6379
+    networks:
+      - platform-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: "512M"
+        reservations:
+          cpus: "0.25"
+          memory: "128M"
+
+  # ----------------------------------------------------------
+  # TECHWATCHER (revisiones cada 6h de docs oficiales)
+  # ----------------------------------------------------------
+  techwatcher:
+    image: devops-platform/techwatcher:latest
+    container_name: platform-techwatcher
+    restart: unless-stopped
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+      - ConnectionStrings__Default=Host=postgres;Database=devops_platform;Username=postgres;Password=${POSTGRES_PASSWORD}
+    networks:
+      - platform-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256M"
+        reservations:
+          cpus: "0.1"
+          memory: "64M"
 
   # ----------------------------------------------------------
   # CLOUDFLARE TUNNEL (runs on host, not in compose - see systemd)

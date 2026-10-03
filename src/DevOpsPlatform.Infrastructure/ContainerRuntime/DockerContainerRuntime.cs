@@ -228,7 +228,7 @@ public class DockerContainerRuntime : IContainerRuntime
         return long.Parse(memory);
     }
 
-    private record LabResourceLimits
+    public record LabResourceLimits
     {
         public string Cpus { get; init; } = "0.5";
         public string Memory { get; init; } = "512m";

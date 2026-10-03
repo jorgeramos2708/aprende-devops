@@ -1,10 +1,12 @@
-using DevOpsPlatform.TechWatcher.Connectors;
+using DevOpsPlatform.Core.Interfaces;
+using DevOpsPlatform.Infrastructure.Data;
+using DevOpsPlatform.Infrastructure.Watch;
 using DevOpsPlatform.TechWatcher.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using DevOpsPlatform.Infrastructure.Data;
+using WatchPipeline = DevOpsPlatform.Infrastructure.Watch.TechnologyWatchService;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -12,12 +14,14 @@ builder.Services.AddDbContext<PlatformDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
 builder.Services.AddHttpClient();
-builder.Services.AddSingleton<IGitHubConnector, GitHubConnector>();
-builder.Services.AddSingleton<IDockerHubConnector, DockerHubConnector>();
-builder.Services.AddSingleton<IRssConnector, RssConnector>();
-builder.Services.AddSingleton<IHtmlConnector, HtmlConnector>();
-builder.Services.AddSingleton<INpmConnector, NpmConnector>();
-builder.Services.AddSingleton<IPyPIConnector, PyPIConnector>();
+builder.Services.AddScoped<ISourceConnector, GitHubConnector>();
+builder.Services.AddScoped<ISourceConnector, DockerHubConnector>();
+builder.Services.AddScoped<ISourceConnector, RssConnector>();
+builder.Services.AddScoped<ISourceConnector, HtmlConnector>();
+builder.Services.AddScoped<ISourceConnector, NpmConnector>();
+builder.Services.AddScoped<ISourceConnector, PyPIConnector>();
+builder.Services.AddScoped<IImpactService, ImpactService>();
+builder.Services.AddScoped<ITechnologyWatchService, WatchPipeline>();
 builder.Services.AddHostedService<TechnologyWatcherService>();
 
 var app = builder.Build();

@@ -1,19 +1,10 @@
-namespace DevOpsPlatform.TechWatcher.Connectors;
+namespace DevOpsPlatform.Infrastructure.Watch;
 
 using DevOpsPlatform.Core.Entities;
 using DevOpsPlatform.Core.Interfaces;
-using AngleSharp;
-using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
-using Octokit;
 using System.Text.Json;
 using System.Xml.Linq;
-
-public interface ISourceConnector
-{
-    string SourceType { get; }
-    Task<SourceCheckResult> CheckAsync(TechnologySource source, CancellationToken ct = default);
-}
 
 public class GitHubConnector : ISourceConnector
 {
@@ -29,9 +20,9 @@ public class GitHubConnector : ISourceConnector
             // source.SourceUrl format: "owner/repo" or full URL
             var repo = source.SourceUrl.Replace("https://github.com/", "").Replace("https://api.github.com/repos/", "");
             var url = $"https://api.github.com/repos/{repo}/releases/latest";
-            
+
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("DevOpsPlatform-TechWatcher/1.0");
-            
+
             var response = await _http.GetAsync(url, ct);
             if (!response.IsSuccessStatusCode)
             {
@@ -48,7 +39,7 @@ public class GitHubConnector : ISourceConnector
 
             var json = await response.Content.ReadAsStringAsync(ct);
             var doc = JsonDocument.Parse(json);
-            
+
             string? version = null;
             string? hash = null;
 
@@ -101,14 +92,14 @@ public class DockerHubConnector : ISourceConnector
             // source.SourceUrl format: "library/ubuntu" or "nginx"
             var repo = source.SourceUrl;
             var url = $"https://hub.docker.com/v2/repositories/{repo}/tags/?page_size=10&ordering=-last_updated";
-            
+
             var response = await _http.GetAsync(url, ct);
             if (!response.IsSuccessStatusCode)
                 return new SourceCheckResult { HasChanges = false, Error = $"Docker Hub API: {response.StatusCode}" };
 
             var json = await response.Content.ReadAsStringAsync(ct);
             var doc = JsonDocument.Parse(json);
-            
+
             var tags = doc.RootElement.GetProperty("results").EnumerateArray()
                 .Select(t => t.GetProperty("name").GetString())
                 .Where(n => !string.IsNullOrEmpty(n) && n != "latest")
@@ -156,7 +147,7 @@ public class RssConnector : ISourceConnector
 
             var xml = await response.Content.ReadAsStringAsync(ct);
             var doc = XDocument.Parse(xml);
-            
+
             var latestItem = doc.Descendants("item").FirstOrDefault();
             if (latestItem == null)
                 latestItem = doc.Descendants("entry").FirstOrDefault(); // Atom
@@ -164,7 +155,7 @@ public class RssConnector : ISourceConnector
             var title = latestItem?.Element("title")?.Value ?? latestItem?.Element("{http://www.w3.org/2005/Atom}title")?.Value;
             var link = latestItem?.Element("link")?.Value ?? latestItem?.Element("{http://www.w3.org/2005/Atom}link")?.Attribute("href")?.Value;
             var pubDate = latestItem?.Element("pubDate")?.Value ?? latestItem?.Element("{http://www.w3.org/2005/Atom}updated")?.Value;
-            
+
             var hash = ComputeHash(xml);
 
             return new SourceCheckResult
@@ -238,7 +229,7 @@ public class HtmlConnector : ISourceConnector
                 HasChanges = true,
                 CurrentVersion = version,
                 ContentHash = hash,
-                RawData = JsonDocument.Parse(JsonSerializer.Serialize(new { version, content: content?[..5000] }))
+                RawData = JsonDocument.Parse(JsonSerializer.Serialize(new { version, content = content?[..5000] }))
             };
         }
         catch (Exception ex)
@@ -268,14 +259,14 @@ public class NpmConnector : ISourceConnector
         {
             var package = source.SourceUrl; // e.g., "terraform" or "@scope/package"
             var url = $"https://registry.npmjs.org/{package}/latest";
-            
+
             var response = await _http.GetAsync(url, ct);
             if (!response.IsSuccessStatusCode)
                 return new SourceCheckResult { HasChanges = false, Error = $"NPM API: {response.StatusCode}" };
 
             var json = await response.Content.ReadAsStringAsync(ct);
             var doc = JsonDocument.Parse(json);
-            
+
             var version = doc.RootElement.GetProperty("version").GetString();
             var hash = ComputeHash(json);
 
@@ -314,14 +305,14 @@ public class PyPIConnector : ISourceConnector
         {
             var package = source.SourceUrl; // e.g., "ansible"
             var url = $"https://pypi.org/pypi/{package}/json";
-            
+
             var response = await _http.GetAsync(url, ct);
             if (!response.IsSuccessStatusCode)
                 return new SourceCheckResult { HasChanges = false, Error = $"PyPI API: {response.StatusCode}" };
 
             var json = await response.Content.ReadAsStringAsync(ct);
             var doc = JsonDocument.Parse(json);
-            
+
             var version = doc.RootElement.GetProperty("info").GetProperty("version").GetString();
             var hash = ComputeHash(json);
 

@@ -1,0 +1,15 @@
+# TechWatcher - revision periodica de versiones oficiales (cada 6h o --once)
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+COPY src/DevOpsPlatform.TechWatcher/DevOpsPlatform.TechWatcher.csproj src/DevOpsPlatform.TechWatcher/
+COPY src/DevOpsPlatform.Core/DevOpsPlatform.Core.csproj src/DevOpsPlatform.Core/
+COPY src/DevOpsPlatform.Infrastructure/DevOpsPlatform.Infrastructure.csproj src/DevOpsPlatform.Infrastructure/
+RUN dotnet restore src/DevOpsPlatform.TechWatcher/DevOpsPlatform.TechWatcher.csproj
+COPY src/ ./src/
+WORKDIR /src/src/DevOpsPlatform.TechWatcher
+RUN dotnet publish DevOpsPlatform.TechWatcher.csproj -c Release -o /app/publish
+
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+WORKDIR /app
+COPY --from=build /app/publish .
+ENTRYPOINT ["dotnet", "DevOpsPlatform.TechWatcher.dll"]

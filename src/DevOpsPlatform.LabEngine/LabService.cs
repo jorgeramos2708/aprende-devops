@@ -27,23 +27,22 @@ public class LabService : ILabService
     {
         var query = _db.LabEnvironments.Where(l => l.IsActive);
 
-        if (!string.IsNullOrEmpty(technology))
-        {
-            // Filter by technology via metadata
-            query = query.Where(l => l.Metadata.RootElement.GetProperty("technology").GetString() == technology);
-        }
-
         if (type.HasValue)
         {
             query = query.Where(l => l.LabType == type.Value);
         }
 
-        var total = await query.CountAsync();
-        var items = await query
-            .OrderBy(l => l.Name)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
+        // El filtro por tecnologia vive dentro del jsonb Metadata: se evalua en memoria
+        // (el catalogo de labs es pequeno; evita traduccion SQL no soportada).
+        var candidates = await query.OrderBy(l => l.Name).ToListAsync();
+
+        if (!string.IsNullOrEmpty(technology))
+        {
+            candidates = candidates.Where(l => MetaEquals(l.Metadata, "technology", technology)).ToList();
+        }
+
+        var total = candidates.Count;
+        var items = candidates.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
         return new PagedResult<LabEnvironment>
         {
@@ -52,6 +51,17 @@ public class LabService : ILabService
             Page = page,
             PageSize = pageSize
         };
+    }
+
+    private static bool MetaEquals(JsonDocument meta, string key, string value)
+    {
+        try
+        {
+            return meta.RootElement.ValueKind == JsonValueKind.Object
+                && meta.RootElement.TryGetProperty(key, out var v)
+                && string.Equals(v.GetString(), value, StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
     }
 
     public async Task<LabEnvironment?> GetLabAsync(Ulid id)

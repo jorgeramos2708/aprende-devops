@@ -210,3 +210,37 @@ public record ProposedChangeDto
     public string Action { get; init; } = string.Empty; // update, replace, deprecate
     public JsonElement? NewContent { get; init; }
 }
+
+public record RegisterRequest(string Email, string Password, string DisplayName);
+
+public record LoginRequest(string Email, string Password);
+
+public record RefreshRequest(string RefreshToken);
+
+public record UserDto
+{
+    public Ulid Id { get; init; }
+    public string Email { get; init; } = string.Empty;
+    public string DisplayName { get; init; } = string.Empty;
+    public string[] Roles { get; init; } = [];
+}
+
+public record AuthResponse
+{
+    public string AccessToken { get; init; } = string.Empty;
+    public string RefreshToken { get; init; } = string.Empty;
+    public UserDto User { get; init; } = new();
+}
+
+public record CreateUpdateProposalRequest
+{
+    public Ulid ChangeId { get; init; }
+    public string Title { get; init; } = string.Empty;
+    public string? Description { get; init; }
+}
+
+public record RunRegressionRequest
+{
+    public Ulid? SuiteId { get; init; }
+    public string TechnologyVersion { get; init; } = "latest";
+}

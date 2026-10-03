@@ -172,9 +172,9 @@ public record TechnologySource : Entity<Ulid>
     public JsonDocument? Selectors { get; init; }
     public JsonDocument? Headers { get; init; }
     public string ScheduleCron { get; init; } = "0 */6 * * *";
-    public DateTimeOffset? LastCheckedAt { get; init; }
-    public string? LastVersion { get; init; }
-    public string? LastContentHash { get; init; }
+    public DateTimeOffset? LastCheckedAt { get; set; }
+    public string? LastVersion { get; set; }
+    public string? LastContentHash { get; set; }
     public bool IsActive { get; init; } = true;
     public JsonDocument Metadata { get; init; } = JsonDocument.Parse("{}");
 }
@@ -241,10 +241,11 @@ public record LabRegressionRun : Entity<Ulid>
     public Ulid SuiteId { get; init; }
     public LabRegressionSuite Suite { get; init; } = null!;
     public string TechnologyVersion { get; init; } = string.Empty;
-    public string Status { get; init; } = string.Empty; // pass, warning, fail, error
-    public string? Output { get; init; }
+    public string Status { get; set; } = string.Empty; // pass, warning, fail, error
+    public string? Output { get; set; }
     public JsonDocument? Artifacts { get; init; }
-    public DateTimeOffset CompletedAt { get; init; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset StartedAt { get; init; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset CompletedAt { get; set; } = DateTimeOffset.UtcNow;
     public JsonDocument Metadata { get; init; } = JsonDocument.Parse("{}");
 }
 

@@ -1,0 +1,16 @@
+bin/
+obj/
+.vs/
+TestResults/
+logs/
+.git/
+.github/
+tests/
+content/
+infra/
+web/node_modules/
+web/dist/
+*.user
+*.suo
+.env
+.env.*

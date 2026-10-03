@@ -1,18 +1,16 @@
-# API - .NET 9 (compatible con VPS x86_64 Contabo y registry propio)
+# Workers - Hangfire (jobs periodicos de limpieza, insights y regresiones)
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
-COPY src/DevOpsPlatform.Api/DevOpsPlatform.Api.csproj src/DevOpsPlatform.Api/
+COPY src/DevOpsPlatform.Workers/DevOpsPlatform.Workers.csproj src/DevOpsPlatform.Workers/
 COPY src/DevOpsPlatform.Core/DevOpsPlatform.Core.csproj src/DevOpsPlatform.Core/
 COPY src/DevOpsPlatform.Infrastructure/DevOpsPlatform.Infrastructure.csproj src/DevOpsPlatform.Infrastructure/
 COPY src/DevOpsPlatform.LabEngine/DevOpsPlatform.LabEngine.csproj src/DevOpsPlatform.LabEngine/
-RUN dotnet restore src/DevOpsPlatform.Api/DevOpsPlatform.Api.csproj
+RUN dotnet restore src/DevOpsPlatform.Workers/DevOpsPlatform.Workers.csproj
 COPY src/ ./src/
-WORKDIR /src/src/DevOpsPlatform.Api
-RUN dotnet publish DevOpsPlatform.Api.csproj -c Release -o /app/publish
+WORKDIR /src/src/DevOpsPlatform.Workers
+RUN dotnet publish DevOpsPlatform.Workers.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
-EXPOSE 8080
-ENV ASPNETCORE_URLS=http://0.0.0.0:8080
 COPY --from=build /app/publish .
-ENTRYPOINT ["dotnet", "DevOpsPlatform.Api.dll"]
+ENTRYPOINT ["dotnet", "DevOpsPlatform.Workers.dll"]

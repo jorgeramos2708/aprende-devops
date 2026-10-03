@@ -1,46 +1,46 @@
 namespace DevOpsPlatform.Workers.Jobs;
 
 using DevOpsPlatform.Core.Entities;
-using DevOpsPlatform.Core.Enums;
 using DevOpsPlatform.Core.Interfaces;
 using DevOpsPlatform.Core.Models;
 using DevOpsPlatform.Infrastructure.Data;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 public interface IBackgroundJobService
 {
-    Task ScheduleLabCleanupAsync(Ulid attemptId, TimeSpan delay);
-    Task ScheduleInsightGenerationAsync(Ulid userId);
-    Task ScheduleCertificationReadinessAsync(Ulid userId, Ulid certificationId);
+    Task ScheduleLabCleanupAsync(string attemptId, TimeSpan delay);
+    Task ScheduleInsightGenerationAsync(string userId);
+    Task ScheduleCertificationReadinessAsync(string userId, string certificationId);
     Task ScheduleLabRegressionAsync(string technology, string version);
 }
 
 public class BackgroundJobService : IBackgroundJobService
 {
-    public Task ScheduleLabCleanupAsync(Ulid attemptId, TimeSpan delay)
+    public Task ScheduleLabCleanupAsync(string attemptId, TimeSpan delay)
     {
-        BackgroundJob.Schedule<LabCleanupJob>(j => j.ExecuteAsync(attemptId, CancellationToken.None), delay);
+        BackgroundJob.Schedule<LabCleanupJob>(j => j.ExecuteAsync(attemptId), delay);
         return Task.CompletedTask;
     }
 
-    public Task ScheduleInsightGenerationAsync(Ulid userId)
+    public Task ScheduleInsightGenerationAsync(string userId)
     {
-        BackgroundJob.Enqueue<InsightGenerationJob>(j => j.ExecuteAsync(userId, CancellationToken.None));
+        BackgroundJob.Enqueue<InsightGenerationJob>(j => j.ExecuteAsync(userId));
         return Task.CompletedTask;
     }
 
-    public Task ScheduleCertificationReadinessAsync(Ulid userId, Ulid certificationId)
+    public Task ScheduleCertificationReadinessAsync(string userId, string certificationId)
     {
-        BackgroundJob.Enqueue<CertificationReadinessJob>(j => j.ExecuteAsync(userId, certificationId, CancellationToken.None));
+        BackgroundJob.Enqueue<CertificationReadinessJob>(j => j.ExecuteAsync(userId, certificationId));
         return Task.CompletedTask;
     }
 
     public Task ScheduleLabRegressionAsync(string technology, string version)
     {
-        BackgroundJob.Enqueue<LabRegressionJob>(j => j.ExecuteAsync(technology, version, CancellationToken.None));
+        BackgroundJob.Enqueue<LabRegressionJob>(j => j.ExecuteAsync(technology, version));
         return Task.CompletedTask;
     }
 }
@@ -56,13 +56,27 @@ public class LabCleanupJob
         _logger = logger;
     }
 
-    public async Task ExecuteAsync(Ulid attemptId, CancellationToken ct)
+    public async Task ExecuteAsync(CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
         var orchestrator = scope.ServiceProvider.GetRequiredService<ILabOrchestrator>();
-        
-        await orchestrator.StopLabAsync(attemptId, ct);
-        _logger.LogInformation("Cleaned up lab attempt {AttemptId}", attemptId);
+        await orchestrator.CleanupExpiredLabsAsync(ct);
+        _logger.LogInformation("Limpieza periodica de laboratorios expirados completada");
+    }
+
+    public async Task ExecuteAsync(string attemptId)
+    {
+        if (!Ulid.TryParse(attemptId, out var id))
+        {
+            _logger.LogWarning("AttemptId invalido para limpieza: {AttemptId}", attemptId);
+            return;
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        var orchestrator = scope.ServiceProvider.GetRequiredService<ILabOrchestrator>();
+
+        await orchestrator.StopLabAsync(id);
+        _logger.LogInformation("Cleaned up lab attempt {AttemptId}", id);
     }
 }
 
@@ -77,18 +91,21 @@ public class InsightGenerationJob
         _logger = logger;
     }
 
-    public async Task ExecuteAsync(Ulid userId, CancellationToken ct)
+    public async Task ExecuteAsync(string userId)
     {
+        if (!Ulid.TryParse(userId, out var uid))
+        {
+            _logger.LogWarning("UserId invalido para insights: {UserId}", userId);
+            return;
+        }
+
+        var ct = CancellationToken.None;
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<PlatformDbContext>();
 
         // Analyze user progress and generate insights
         var progress = await db.UserProgress
-            .Where(p => p.UserId == userId)
-            .ToListAsync(ct);
-
-        var skills = await db.UserSkills
-            .Where(s => s.UserId == userId)
+            .Where(p => p.UserId == uid)
             .ToListAsync(ct);
 
         var insights = new List<Insight>();
@@ -97,7 +114,7 @@ public class InsightGenerationJob
         var weakTopics = progress
             .Where(p => p.Status == "completed" && p.Score.HasValue && p.Score < 70)
             .GroupBy(p => p.NodeId)
-            .Select(g => new { NodeId = g.Key, AvgScore = g.Average(p => p.Score.Value), Count = g.Count() })
+            .Select(g => new { NodeId = g.Key, AvgScore = g.Average(p => p.Score!.Value), Count = g.Count() })
             .Where(x => x.AvgScore < 70 && x.Count >= 2)
             .OrderBy(x => x.AvgScore)
             .Take(5);
@@ -110,7 +127,7 @@ public class InsightGenerationJob
                 insights.Add(new Insight
                 {
                     Id = Ulid.NewUlid(),
-                    UserId = userId,
+                    UserId = uid,
                     Type = "weakness",
                     Title = $"Refuerza: {node.Title}",
                     Description = $"Tu puntuación promedio en este tema es {weak.AvgScore:F0}%. Revisa la teoría y repite los laboratorios.",
@@ -125,7 +142,7 @@ public class InsightGenerationJob
         var strongTopics = progress
             .Where(p => p.Status == "completed" && p.Score.HasValue && p.Score >= 90)
             .GroupBy(p => p.NodeId)
-            .Select(g => new { NodeId = g.Key, AvgScore = g.Average(p => p.Score.Value), Count = g.Count() })
+            .Select(g => new { NodeId = g.Key, AvgScore = g.Average(p => p.Score!.Value), Count = g.Count() })
             .Where(x => x.AvgScore >= 90 && x.Count >= 2)
             .OrderByDescending(x => x.AvgScore)
             .Take(3);
@@ -138,7 +155,7 @@ public class InsightGenerationJob
                 insights.Add(new Insight
                 {
                     Id = Ulid.NewUlid(),
-                    UserId = userId,
+                    UserId = uid,
                     Type = "strength",
                     Title = $"Fortaleza: {node.Title}",
                     Description = $"Dominas este tema con {strong.AvgScore:F0}% de puntuación promedio.",
@@ -165,8 +182,8 @@ public class InsightGenerationJob
                 .Select(p => p.NodeId)
                 .ToHashSet();
 
-            var readiness = coveredNodes.Count > 0 
-                ? (decimal)userCompletedNodes.Count / coveredNodes.Count * 100 
+            var readiness = coveredNodes.Count > 0
+                ? (decimal)userCompletedNodes.Count / coveredNodes.Count * 100
                 : 0;
 
             if (readiness > 50 && readiness < 90)
@@ -174,16 +191,16 @@ public class InsightGenerationJob
                 insights.Add(new Insight
                 {
                     Id = Ulid.NewUlid(),
-                    UserId = userId,
+                    UserId = uid,
                     Type = "certification_readiness",
                     Title = $"Preparación para {cert.Code}: {readiness:F0}%",
                     Description = $"Estás a {(100 - readiness):F0}% de cubrir los temas para {cert.Name}.",
                     RelatedNodeIds = coveredNodes.Except(userCompletedNodes).Take(10).ToArray(),
                     Priority = readiness > 80 ? 7 : 5,
-                    Metadata = JsonDocument.Parse(JsonSerializer.Serialize(new 
-                    { 
-                        certificationId = cert.Id.ToString(), 
-                        readiness = readiness,
+                    Metadata = JsonDocument.Parse(JsonSerializer.Serialize(new
+                    {
+                        certificationId = cert.Id.ToString(),
+                        readiness,
                         missingCount = coveredNodes.Count - userCompletedNodes.Count
                     }))
                 });
@@ -194,7 +211,7 @@ public class InsightGenerationJob
         db.Insights.AddRange(insights);
         await db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("Generated {Count} insights for user {UserId}", insights.Count, userId);
+        _logger.LogInformation("Generated {Count} insights for user {UserId}", insights.Count, uid);
     }
 }
 
@@ -209,10 +226,49 @@ public class CertificationReadinessJob
         _logger = logger;
     }
 
-    public async Task ExecuteAsync(Ulid userId, Ulid certificationId, CancellationToken ct)
+    public async Task ExecuteAsync(string userId, string certificationId)
     {
-        // Detailed certification readiness report generation
-        await Task.CompletedTask;
+        if (!Ulid.TryParse(userId, out var uid) || !Ulid.TryParse(certificationId, out var cid))
+        {
+            _logger.LogWarning("Ids invalidos para readiness: {UserId}/{CertId}", userId, certificationId);
+            return;
+        }
+
+        var ct = CancellationToken.None;
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PlatformDbContext>();
+
+        var mappings = await db.CertificationMappings
+            .Include(m => m.Certification)
+            .Where(m => m.CertificationId == cid)
+            .ToListAsync(ct);
+
+        if (mappings.Count == 0) return;
+
+        var cert = mappings[0].Certification;
+        var completed = (await db.UserProgress
+            .Where(p => p.UserId == uid && p.Status == "completed")
+            .Select(p => p.NodeId)
+            .ToListAsync(ct)).ToHashSet();
+
+        var total = mappings.Sum(m => m.CoverageWeight);
+        var covered = mappings.Where(m => completed.Contains(m.NodeId)).Sum(m => m.CoverageWeight);
+        var readiness = total > 0 ? Math.Round(covered / total * 100, 2) : 0;
+
+        db.Insights.Add(new Insight
+        {
+            Id = Ulid.NewUlid(),
+            UserId = uid,
+            Type = "certification_readiness",
+            Title = $"Preparación para {cert.Code}: {readiness:F0}%",
+            Description = $"Reporte detallado: {covered:F0} de {total:F0} puntos de cobertura.",
+            RelatedNodeIds = mappings.Where(m => !completed.Contains(m.NodeId)).Select(m => m.NodeId).Take(10).ToArray(),
+            Priority = 6,
+            Metadata = JsonDocument.Parse(JsonSerializer.Serialize(new { certificationId = cert.Id.ToString(), readiness }))
+        });
+        await db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Readiness {Cert} usuario {UserId}: {Pct}%", cert.Code, uid, readiness);
     }
 }
 
@@ -227,16 +283,21 @@ public class LabRegressionJob
         _logger = logger;
     }
 
+    public Task ExecuteAsync(string technology, string version)
+        => ExecuteAsync(technology, version, CancellationToken.None);
+
     public async Task ExecuteAsync(string technology, string version, CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<PlatformDbContext>();
         var containerRuntime = scope.ServiceProvider.GetRequiredService<IContainerRuntime>();
 
-        var suites = await db.LabRegressionSuites
+        var suites = (await db.LabRegressionSuites
             .Include(s => s.LabEnvironment)
-            .Where(s => s.IsActive && s.LabEnvironment.Metadata.RootElement.GetProperty("technology").GetString() == technology)
-            .ToListAsync(ct);
+            .Where(s => s.IsActive)
+            .ToListAsync(ct))
+            .Where(s => LabMatchesTechnology(s.LabEnvironment, technology))
+            .ToList();
 
         _logger.LogInformation("Running regression for {Technology} {Version}: {Count} suites", technology, version, suites.Count);
 
@@ -261,49 +322,51 @@ public class LabRegressionJob
                 await containerRuntime.StartContainerAsync(containerId, ct);
 
                 // Run test script
-                var result = await containerRuntime.ExecAsync(containerId, new[] { "bash", "-c", suite.TestScript }, ct);
+                var result = await containerRuntime.ExecAsync(containerId, ["bash", "-c", suite.TestScript], ct);
 
-                run.Status = result.ExitCode == 0 ? "pass" : "fail";
-                run.Output = result.Stdout + "
-" + result.Stderr;
-                run.CompletedAt = DateTimeOffset.UtcNow;
-
-                // Cleanup
-                await containerRuntime.StopContainerAsync(containerId, ct);
-                await containerRuntime.RemoveContainerAsync(containerId, ct);
+                var finished = run with
+                {
+                    Status = result.ExitCode == 0 ? "pass" : "fail",
+                    Output = result.Stdout + "\n" + result.Stderr,
+                    CompletedAt = DateTimeOffset.UtcNow
+                };
+                db.Entry(run).CurrentValues.SetValues(finished);
+                await db.SaveChangesAsync(ct);
             }
             catch (Exception ex)
             {
-                run.Status = "error";
-                run.Output = ex.ToString();
-                run.CompletedAt = DateTimeOffset.UtcNow;
+                var failed = run with { Status = "error", Output = ex.Message, CompletedAt = DateTimeOffset.UtcNow };
+                db.Entry(run).CurrentValues.SetValues(failed);
+                await db.SaveChangesAsync(ct);
                 _logger.LogError(ex, "Regression failed for suite {SuiteId}", suite.Id);
             }
-
-            await db.SaveChangesAsync(ct);
         }
 
         _logger.LogInformation("Regression completed for {Technology} {Version}", technology, version);
+    }
+
+    private static bool LabMatchesTechnology(LabEnvironment lab, string technology)
+    {
+        try
+        {
+            return lab.Metadata.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
+                && lab.Metadata.RootElement.TryGetProperty("technology", out var v)
+                && string.Equals(v.GetString(), technology, StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
     }
 }
 
 // Hangfire recurring jobs setup
 public static class RecurringJobs
 {
-    public static void Configure(IServiceProvider services)
+    public static void Configure()
     {
         var manager = new RecurringJobManager();
-        
-        // Daily lab cleanup at 3 AM
-        manager.AddOrUpdate<LabCleanupJob>("daily-lab-cleanup", 
-            j => j.ExecuteAsync(Ulid.Empty, CancellationToken.None), 
+
+        // Limpieza diaria de laboratorios expirados a las 3 AM
+        manager.AddOrUpdate<LabCleanupJob>("daily-lab-cleanup",
+            j => j.ExecuteAsync(CancellationToken.None),
             "0 3 * * *");
-        
-        // Weekly insight generation
-        manager.AddOrUpdate<InsightGenerationJob>("weekly-insights", 
-            j => j.ExecuteAsync(Ulid.Empty, CancellationToken.None), 
-            "0 4 * * 0");
-        
-        // Daily tech watcher (handled by separate service)
     }
 }

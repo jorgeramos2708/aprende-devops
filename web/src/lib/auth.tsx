@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- AuthProvider + useAuth conviven a proposito */
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useLocation, Navigate } from 'react-router-dom'
 import { api } from './api'
