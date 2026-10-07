@@ -29,7 +29,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-          cache: true
+          # sin cache: exigiria packages.lock.json (no usamos lock de nuget)
 
       - name: Restore dependencies
         run: dotnet restore DevOpsPlatform.sln
@@ -66,6 +66,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
+          cache-dependency-path: web/package-lock.json   # el lockfile no esta en la raiz
 
       - name: Install dependencies
         run: npm ci
