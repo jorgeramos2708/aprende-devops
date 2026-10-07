@@ -40,15 +40,8 @@ jobs:
       - name: Run unit tests
         run: dotnet test DevOpsPlatform.sln --no-build --configuration Release --collect:"XPlat Code Coverage" --results-directory ../test-results
 
-      - name: Publish API
-        run: dotnet publish DevOpsPlatform.Api/DevOpsPlatform.Api.csproj --no-build --configuration Release --output ../artifacts/api
-
-      - name: Upload API artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: api
-          path: artifacts/api/
-          retention-days: 1
+      # Nota: los Dockerfile hacen restore/publish por su cuenta (multi-stage);
+      # no se transfieren artefactos entre jobs.
 
   # ----------------------------------------------------------
   # FRONTEND: Build, Test, Lint
@@ -83,13 +76,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-dist
-          path: dist/
-          retention-days: 1
-
   # ----------------------------------------------------------
   # DOCKER: Build & Push a Zot (registry.edrs.xyz)
   # ----------------------------------------------------------
@@ -100,18 +86,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download API artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: api
-          path: artifacts/api
-
-      - name: Download Web artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: artifacts/web
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
