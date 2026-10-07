@@ -21,6 +21,7 @@ vite.config.ts.timestamp-*
 # Env / secrets - nunca commitear reales
 .env
 .env.*
+!.env.example
 *.pfx
 *.p12
 secrets/

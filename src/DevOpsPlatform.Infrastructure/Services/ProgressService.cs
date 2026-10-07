@@ -18,7 +18,7 @@ public class ProgressService : IProgressService
         _logger = logger;
     }
 
-    public async Task<UserProgressDto> UpdateProgressAsync(Ulid userId, ProgressUpdateRequest req, CancellationToken ct = default)
+    public async Task<UserProgressDto> UpdateProgressAsync(Guid userId, ProgressUpdateRequest req, CancellationToken ct = default)
     {
         var node = await _db.KnowledgeNodes.FindAsync([req.NodeId], ct)
             ?? throw new InvalidOperationException("Nodo no encontrado.");
@@ -30,7 +30,7 @@ public class ProgressService : IProgressService
         {
             progress = new UserProgress
             {
-                Id = Ulid.NewUlid(),
+                Id = Guid.CreateVersion7(),
                 UserId = userId,
                 NodeId = req.NodeId,
                 Status = req.Status,
@@ -60,7 +60,7 @@ public class ProgressService : IProgressService
         return ToDto(progress, node.Title, node.Type);
     }
 
-    public async Task<IReadOnlyList<UserProgressDto>> GetProgressAsync(Ulid userId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<UserProgressDto>> GetProgressAsync(Guid userId, CancellationToken ct = default)
     {
         var items = await _db.UserProgress
             .Include(p => p.Node)
@@ -71,7 +71,7 @@ public class ProgressService : IProgressService
         return items.Select(p => ToDto(p, p.Node?.Title ?? string.Empty, p.Node?.Type ?? Core.Enums.NodeType.Lesson)).ToList();
     }
 
-    public async Task<IReadOnlyList<SkillAssessmentDto>> GetSkillsAsync(Ulid userId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<SkillAssessmentDto>> GetSkillsAsync(Guid userId, CancellationToken ct = default)
     {
         var skills = await _db.UserSkills.Where(s => s.UserId == userId).ToListAsync(ct);
         return skills.Select(s => new SkillAssessmentDto
@@ -86,7 +86,7 @@ public class ProgressService : IProgressService
         }).ToList();
     }
 
-    private async Task UpsertSkillAsync(KnowledgeNode node, UserProgress progress, Ulid userId, CancellationToken ct)
+    private async Task UpsertSkillAsync(KnowledgeNode node, UserProgress progress, Guid userId, CancellationToken ct)
     {
         // La tecnologia y el nivel viajan en el Metadata del nodo (ver DbSeeder)
         var technology = ReadMeta(node, "technology") ?? node.Slug;
@@ -97,7 +97,7 @@ public class ProgressService : IProgressService
         await UpsertSkillAsync(userId, technology, topic, level, progress.Score, ct);
     }
 
-    private async Task UpsertSkillAsync(Ulid userId, string technology, string? topic, string level, decimal? score, CancellationToken ct)
+    private async Task UpsertSkillAsync(Guid userId, string technology, string? topic, string level, decimal? score, CancellationToken ct)
     {
         var skill = await _db.UserSkills.FirstOrDefaultAsync(
             s => s.UserId == userId && s.Technology == technology && s.Topic == topic && s.Level == level, ct);
@@ -106,7 +106,7 @@ public class ProgressService : IProgressService
         {
             skill = new UserSkill
             {
-                Id = Ulid.NewUlid(),
+                Id = Guid.CreateVersion7(),
                 UserId = userId,
                 Technology = technology,
                 Topic = topic,
@@ -134,7 +134,7 @@ public class ProgressService : IProgressService
     }
 
     // Punto de entrada usado por ExamService para registrar evidencia de examen
-    internal async Task AddExamEvidenceAsync(Ulid userId, string technology, string? topic, string level, decimal score, CancellationToken ct)
+    internal async Task AddExamEvidenceAsync(Guid userId, string technology, string? topic, string level, decimal score, CancellationToken ct)
         => await UpsertSkillAsync(userId, technology, topic, level, score, ct);
 
     private static string? ReadMeta(KnowledgeNode node, string key)

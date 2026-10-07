@@ -58,7 +58,7 @@ public class TechnologyWatchService : ITechnologyWatchService
                 {
                     var change = new TechnologyChange
                     {
-                        Id = Ulid.NewUlid(),
+                        Id = Guid.CreateVersion7(),
                         Technology = source.Technology,
                         SourceId = source.Id,
                         ChangeType = Classify(source.LastVersion, result.CurrentVersion),

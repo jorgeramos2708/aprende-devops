@@ -1,47 +1,27 @@
-name: Technology Watcher
+# TechWatcher corre como servicio permanente en el VPS (loop interno de 6h).
+# Este workflow permite forzar una ejecucion puntual sin entrar al VPS a mano.
+name: Technology Watcher (manual)
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
   workflow_dispatch:
     inputs:
       technology:
-        description: 'Specific technology to check (optional)'
+        description: 'Tecnologia a revisar (vacio = todas)'
         required: false
         type: string
 
 jobs:
-  watch:
+  run-once:
     runs-on: ubuntu-latest
+    environment: production
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
         with:
-          dotnet-version: '9.0.x'
-      
-      - name: Restore
-        run: dotnet restore ./src/DevOpsPlatform.TechWatcher/DevOpsPlatform.TechWatcher.csproj
-      
-      - name: Run Watcher
-        env:
-          ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
-          ConnectionStrings__Redis: ${{ secrets.REDIS_CONNECTION_STRING }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+
+      - name: Execute watcher in VPS container
         run: |
-          cd ./src/DevOpsPlatform.TechWatcher
-          dotnet run --configuration Release -- ${{ github.event.inputs.technology }}
-      
-      - name: Notify on changes
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: '🔴 Technology Watcher detected changes requiring review',
-              body: 'The Technology Watcher job failed or detected high-impact changes. Check the workflow run for details.',
-              labels: ['tech-watcher', 'review-needed']
-            })
+          ssh -p 2222 ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} \
+            "docker exec aprende-techwatcher dotnet DevOpsPlatform.TechWatcher.dll --once '${{ github.event.inputs.technology }}'"

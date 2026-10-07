@@ -66,7 +66,7 @@ public class LabCleanupJob
 
     public async Task ExecuteAsync(string attemptId)
     {
-        if (!Ulid.TryParse(attemptId, out var id))
+        if (!Guid.TryParse(attemptId, out var id))
         {
             _logger.LogWarning("AttemptId invalido para limpieza: {AttemptId}", attemptId);
             return;
@@ -93,7 +93,7 @@ public class InsightGenerationJob
 
     public async Task ExecuteAsync(string userId)
     {
-        if (!Ulid.TryParse(userId, out var uid))
+        if (!Guid.TryParse(userId, out var uid))
         {
             _logger.LogWarning("UserId invalido para insights: {UserId}", userId);
             return;
@@ -126,7 +126,7 @@ public class InsightGenerationJob
             {
                 insights.Add(new Insight
                 {
-                    Id = Ulid.NewUlid(),
+                    Id = Guid.CreateVersion7(),
                     UserId = uid,
                     Type = "weakness",
                     Title = $"Refuerza: {node.Title}",
@@ -154,7 +154,7 @@ public class InsightGenerationJob
             {
                 insights.Add(new Insight
                 {
-                    Id = Ulid.NewUlid(),
+                    Id = Guid.CreateVersion7(),
                     UserId = uid,
                     Type = "strength",
                     Title = $"Fortaleza: {node.Title}",
@@ -190,7 +190,7 @@ public class InsightGenerationJob
             {
                 insights.Add(new Insight
                 {
-                    Id = Ulid.NewUlid(),
+                    Id = Guid.CreateVersion7(),
                     UserId = uid,
                     Type = "certification_readiness",
                     Title = $"Preparación para {cert.Code}: {readiness:F0}%",
@@ -228,7 +228,7 @@ public class CertificationReadinessJob
 
     public async Task ExecuteAsync(string userId, string certificationId)
     {
-        if (!Ulid.TryParse(userId, out var uid) || !Ulid.TryParse(certificationId, out var cid))
+        if (!Guid.TryParse(userId, out var uid) || !Guid.TryParse(certificationId, out var cid))
         {
             _logger.LogWarning("Ids invalidos para readiness: {UserId}/{CertId}", userId, certificationId);
             return;
@@ -257,7 +257,7 @@ public class CertificationReadinessJob
 
         db.Insights.Add(new Insight
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             UserId = uid,
             Type = "certification_readiness",
             Title = $"Preparación para {cert.Code}: {readiness:F0}%",
@@ -305,7 +305,7 @@ public class LabRegressionJob
         {
             var run = new LabRegressionRun
             {
-                Id = Ulid.NewUlid(),
+                Id = Guid.CreateVersion7(),
                 SuiteId = suite.Id,
                 TechnologyVersion = version,
                 Status = "running",
@@ -318,7 +318,7 @@ public class LabRegressionJob
             try
             {
                 // Create temporary container for regression test
-                var containerId = await containerRuntime.CreateContainerAsync(suite.LabEnvironment, Ulid.NewUlid(), ct);
+                var containerId = await containerRuntime.CreateContainerAsync(suite.LabEnvironment, Guid.CreateVersion7(), ct);
                 await containerRuntime.StartContainerAsync(containerId, ct);
 
                 // Run test script

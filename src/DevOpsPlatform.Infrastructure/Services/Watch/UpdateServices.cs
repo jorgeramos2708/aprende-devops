@@ -26,7 +26,7 @@ public class ImpactService : IImpactService
             .Take(100)
             .ToListAsync(ct);
 
-    public async Task<ImpactAssessment> EnsureForChangeAsync(Ulid changeId, CancellationToken ct = default)
+    public async Task<ImpactAssessment> EnsureForChangeAsync(Guid changeId, CancellationToken ct = default)
     {
         var existing = await _db.ImpactAssessments.FirstOrDefaultAsync(a => a.ChangeId == changeId, ct);
         if (existing != null) return existing;
@@ -66,7 +66,7 @@ public class ImpactService : IImpactService
 
         var assessment = new ImpactAssessment
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             ChangeId = change.Id,
             AffectedNodes = JsonDocument.Parse(JsonSerializer.Serialize(affectedNodes)),
             AffectedLabs = JsonDocument.Parse(JsonSerializer.Serialize(affectedLabs)),
@@ -114,14 +114,14 @@ public class UpdateService : IUpdateService
             .Take(100)
             .ToListAsync(ct);
 
-    public async Task<UpdateProposal> CreateAsync(Ulid changeId, CreateUpdateProposalRequest req, Ulid createdBy, CancellationToken ct = default)
+    public async Task<UpdateProposal> CreateAsync(Guid changeId, CreateUpdateProposalRequest req, Guid createdBy, CancellationToken ct = default)
     {
         _ = await _db.TechnologyChanges.FindAsync([changeId], ct)
             ?? throw new InvalidOperationException("Cambio no encontrado.");
 
         var proposal = new UpdateProposal
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             ChangeId = req.ChangeId,
             Title = req.Title,
             Description = req.Description,
@@ -135,7 +135,7 @@ public class UpdateService : IUpdateService
         return proposal;
     }
 
-    public async Task<UpdateProposal> ApproveAsync(Ulid id, Ulid reviewedBy, CancellationToken ct = default)
+    public async Task<UpdateProposal> ApproveAsync(Guid id, Guid reviewedBy, CancellationToken ct = default)
     {
         var proposal = await _db.UpdateProposals.FindAsync([id], ct)
             ?? throw new InvalidOperationException("Propuesta no encontrada.");
@@ -168,7 +168,7 @@ public class RegressionService : IRegressionService
     public async Task<IReadOnlyList<LabRegressionRun>> RunAsync(string? suiteId, string technologyVersion, CancellationToken ct = default)
     {
         var query = _db.LabRegressionSuites.Include(s => s.LabEnvironment).Where(s => s.IsActive);
-        if (suiteId != null && Ulid.TryParse(suiteId, out var sid))
+        if (suiteId != null && Guid.TryParse(suiteId, out var sid))
             query = query.Where(s => s.Id == sid);
 
         var suites = await query.ToListAsync(ct);
@@ -178,7 +178,7 @@ public class RegressionService : IRegressionService
         {
             var run = new LabRegressionRun
             {
-                Id = Ulid.NewUlid(),
+                Id = Guid.CreateVersion7(),
                 SuiteId = suite.Id,
                 TechnologyVersion = technologyVersion,
                 Status = "running",
@@ -189,7 +189,7 @@ public class RegressionService : IRegressionService
 
             try
             {
-                var containerId = await _runtime.CreateContainerAsync(suite.LabEnvironment, Ulid.NewUlid(), ct);
+                var containerId = await _runtime.CreateContainerAsync(suite.LabEnvironment, Guid.CreateVersion7(), ct);
                 await _runtime.StartContainerAsync(containerId, ct);
                 var result = await _runtime.ExecAsync(containerId, ["bash", "-c", suite.TestScript], ct);
                 await _runtime.StopContainerAsync(containerId, ct);

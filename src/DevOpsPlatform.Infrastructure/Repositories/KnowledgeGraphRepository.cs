@@ -13,7 +13,7 @@ public class KnowledgeGraphRepository : IKnowledgeGraphRepository
 
     public KnowledgeGraphRepository(PlatformDbContext db) => _db = db;
 
-    public async Task<KnowledgeNode?> GetByIdAsync(Ulid id, CancellationToken ct = default)
+    public async Task<KnowledgeNode?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => await _db.KnowledgeNodes
             .Include(n => n.Parent)
             .Include(n => n.Children)
@@ -26,20 +26,20 @@ public class KnowledgeGraphRepository : IKnowledgeGraphRepository
         return await query.FirstOrDefaultAsync(ct);
     }
 
-    public async Task<IReadOnlyList<KnowledgeNode>> GetChildrenAsync(Ulid parentId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<KnowledgeNode>> GetChildrenAsync(Guid parentId, CancellationToken ct = default)
         => await _db.KnowledgeNodes.Where(n => n.ParentId == parentId).OrderBy(n => n.Title).ToListAsync(ct);
 
     public async Task<IReadOnlyList<KnowledgeNode>> GetByTypeAsync(NodeType type, CancellationToken ct = default)
         => await _db.KnowledgeNodes.Where(n => n.Type == type).OrderBy(n => n.Title).ToListAsync(ct);
 
-    public async Task<IReadOnlyList<KnowledgeEdge>> GetOutgoingEdgesAsync(Ulid nodeId, EdgeType? edgeType = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<KnowledgeEdge>> GetOutgoingEdgesAsync(Guid nodeId, EdgeType? edgeType = null, CancellationToken ct = default)
     {
         var query = _db.KnowledgeEdges.Where(e => e.FromId == nodeId);
         if (edgeType.HasValue) query = query.Where(e => e.EdgeType == edgeType.Value);
         return await query.Include(e => e.ToNode).ToListAsync(ct);
     }
 
-    public async Task<IReadOnlyList<KnowledgeEdge>> GetIncomingEdgesAsync(Ulid nodeId, EdgeType? edgeType = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<KnowledgeEdge>> GetIncomingEdgesAsync(Guid nodeId, EdgeType? edgeType = null, CancellationToken ct = default)
     {
         var query = _db.KnowledgeEdges.Where(e => e.ToId == nodeId);
         if (edgeType.HasValue) query = query.Where(e => e.EdgeType == edgeType.Value);
@@ -66,7 +66,7 @@ public class KnowledgeGraphRepository : IKnowledgeGraphRepository
         await _db.SaveChangesAsync(ct);
     }
 
-    public async Task RemoveEdgeAsync(Ulid fromId, Ulid toId, EdgeType edgeType, CancellationToken ct = default)
+    public async Task RemoveEdgeAsync(Guid fromId, Guid toId, EdgeType edgeType, CancellationToken ct = default)
     {
         var edge = await _db.KnowledgeEdges.FindAsync([fromId, toId, edgeType], ct);
         if (edge != null)
@@ -76,7 +76,7 @@ public class KnowledgeGraphRepository : IKnowledgeGraphRepository
         }
     }
 
-    public async Task<IReadOnlyList<Ulid>> GetPrerequisitesAsync(Ulid nodeId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<Guid>> GetPrerequisitesAsync(Guid nodeId, CancellationToken ct = default)
     {
         var edges = await _db.KnowledgeEdges
             .Where(e => e.ToId == nodeId && e.EdgeType == EdgeType.Prereq)
@@ -85,7 +85,7 @@ public class KnowledgeGraphRepository : IKnowledgeGraphRepository
         return edges;
     }
 
-    public async Task<IReadOnlyList<Ulid>> GetDependentsAsync(Ulid nodeId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<Guid>> GetDependentsAsync(Guid nodeId, CancellationToken ct = default)
     {
         var edges = await _db.KnowledgeEdges
             .Where(e => e.FromId == nodeId && e.EdgeType == EdgeType.Prereq)

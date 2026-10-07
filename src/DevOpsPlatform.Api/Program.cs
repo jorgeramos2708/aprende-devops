@@ -1,4 +1,3 @@
-using DevOpsPlatform.Api.Converters;
 using DevOpsPlatform.Api.Hubs;
 using DevOpsPlatform.Api.Middleware;
 using DevOpsPlatform.Core.Entities;
@@ -56,10 +55,9 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// JSON: Ulid se serializa como string
+// JSON: enums como string en la API
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
-    o.SerializerOptions.Converters.Add(new UlidJsonConverter());
     o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
 
@@ -134,7 +132,9 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 
 // Custom services
 builder.Services.AddScoped<IKnowledgeGraphRepository, DevOpsPlatform.Infrastructure.Repositories.KnowledgeGraphRepository>();
-builder.Services.AddScoped<IContainerRuntime, DevOpsPlatform.Infrastructure.ContainerRuntime.DockerContainerRuntime>();
+// DockerContainerRuntime es un wrapper sin estado sobre DockerClient: seguro como singleton
+// (ademas IHostedService/TerminalStreamManager no puede consumir servicios scoped)
+builder.Services.AddSingleton<IContainerRuntime, DevOpsPlatform.Infrastructure.ContainerRuntime.DockerContainerRuntime>();
 builder.Services.AddScoped<ILabOrchestrator, LabOrchestrator>();
 builder.Services.AddScoped<ILabService, LabService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -179,13 +179,13 @@ app.MapHub<NotificationHub>("/api/notifications/hub");
 
 app.MapHealthChecks("/health");
 
-static Ulid UserIdOf(HttpContext ctx)
+static Guid UserIdOf(HttpContext ctx)
 {
     // JwtBearer mapea "sub" a NameIdentifier por defecto: aceptar ambos
     var sub = ctx.User.FindFirst("sub")?.Value
         ?? ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
         ?? throw new InvalidOperationException("Sin claim sub.");
-    return Ulid.Parse(sub);
+    return Guid.Parse(sub);
 }
 
 static string Meta(KnowledgeNode node, string key)
@@ -218,7 +218,7 @@ auth.MapPost("/register", async (RegisterRequest req, PlatformDbContext db, IPas
 
     var user = new ApplicationUser
     {
-        Id = Ulid.NewUlid(),
+        Id = Guid.CreateVersion7(),
         Email = email,
         PasswordHash = hasher.Hash(req.Password),
         DisplayName = string.IsNullOrWhiteSpace(req.DisplayName) ? email : req.DisplayName.Trim()
@@ -309,7 +309,7 @@ learning.MapGet("/technologies/{slug}", async (string slug, IKnowledgeGraphRepos
     });
 });
 
-learning.MapGet("/nodes/{id}", async (Ulid id, IKnowledgeGraphRepository repo, PlatformDbContext db, CancellationToken ct) =>
+learning.MapGet("/nodes/{id}", async (Guid id, IKnowledgeGraphRepository repo, PlatformDbContext db, CancellationToken ct) =>
 {
     var node = await repo.GetByIdAsync(id, ct);
     if (node == null) return Results.NotFound();
@@ -324,7 +324,7 @@ learning.MapGet("/nodes/{id}", async (Ulid id, IKnowledgeGraphRepository repo, P
     catch { markdown = null; }
 
     var tech = Meta(node, "technology");
-    Ulid? labId = null;
+    Guid? labId = null;
     if (!string.IsNullOrEmpty(tech))
     {
         var labs = await db.LabEnvironments.Where(l => l.IsActive).ToListAsync(ct);
@@ -341,7 +341,7 @@ learning.MapGet("/nodes/{id}", async (Ulid id, IKnowledgeGraphRepository repo, P
     });
 });
 
-learning.MapGet("/nodes/{id}/children", async (Ulid id, IKnowledgeGraphRepository repo, CancellationToken ct) =>
+learning.MapGet("/nodes/{id}/children", async (Guid id, IKnowledgeGraphRepository repo, CancellationToken ct) =>
 {
     var children = await repo.GetChildrenAsync(id, ct);
     return Results.Ok(children.Select(c => new { id = c.Id, title = c.Title, type = c.Type.ToString() }));
@@ -367,15 +367,15 @@ learning.MapGet("/skills", async (HttpContext ctx, IProgressService progress, Ca
 
 // Lab Engine
 var labs = api.MapGroup("/labs");
-labs.MapGet("/", async (string? technology, string? type, ILabService labService, int page = 1, int pageSize = 20, CancellationToken ct = default) =>
+labs.MapGet("/", async (string? technology, string? type, ILabService labService, int? page, int? pageSize, CancellationToken ct) =>
 {
     LabType? labType = null;
     if (!string.IsNullOrEmpty(type) && Enum.TryParse<LabType>(type, true, out var parsed))
         labType = parsed;
-    return Results.Ok(await labService.GetLabsAsync(technology, labType, page <= 0 ? 1 : page, pageSize <= 0 ? 20 : pageSize));
+    return Results.Ok(await labService.GetLabsAsync(technology, labType, Math.Max(page ?? 1, 1), Math.Max(pageSize ?? 20, 1)));
 });
 
-labs.MapGet("/{id}", async (Ulid id, ILabService labService, CancellationToken ct) =>
+labs.MapGet("/{id}", async (Guid id, ILabService labService, CancellationToken ct) =>
 {
     var lab = await labService.GetLabAsync(id);
     return lab == null ? Results.NotFound() : Results.Ok(lab);
@@ -398,16 +398,16 @@ labs.MapPost("/start", async (LabStartRequest req, HttpContext ctx, ILabOrchestr
     });
 });
 
-labs.MapPost("/{attemptId}/stop", async (Ulid attemptId, ILabOrchestrator orchestrator, CancellationToken ct) =>
+labs.MapPost("/{attemptId}/stop", async (Guid attemptId, ILabOrchestrator orchestrator, CancellationToken ct) =>
 {
     await orchestrator.StopLabAsync(attemptId, ct);
     return Results.Ok();
 });
 
-labs.MapPost("/{attemptId}/validate", async (Ulid attemptId, ILabOrchestrator orchestrator, CancellationToken ct) =>
+labs.MapPost("/{attemptId}/validate", async (Guid attemptId, ILabOrchestrator orchestrator, CancellationToken ct) =>
     Results.Ok(await orchestrator.ValidateLabAsync(attemptId, ct)));
 
-labs.MapGet("/{attemptId}/terminal/token", async (Ulid attemptId, ILabOrchestrator orchestrator, CancellationToken ct) =>
+labs.MapGet("/{attemptId}/terminal/token", async (Guid attemptId, ILabOrchestrator orchestrator, CancellationToken ct) =>
     Results.Ok(await orchestrator.ConnectTerminalAsync(attemptId, 120, 30, ct)));
 
 // Assessment Engine
@@ -415,7 +415,7 @@ var assessment = api.MapGroup("/assessment");
 assessment.MapGet("/exams", async (IExamService exams, CancellationToken ct) =>
     Results.Ok(await exams.GetExamsAsync(ct)));
 
-assessment.MapGet("/exams/{id}", async (Ulid id, IExamService exams, CancellationToken ct) =>
+assessment.MapGet("/exams/{id}", async (Guid id, IExamService exams, CancellationToken ct) =>
 {
     var exam = await exams.GetExamAsync(id, ct);
     return exam == null ? Results.NotFound() : Results.Ok(exam);
@@ -427,7 +427,7 @@ assessment.MapPost("/exams/start", async (ExamStartRequest req, HttpContext ctx,
 assessment.MapPost("/exams/submit", async (ExamSubmitRequest req, HttpContext ctx, IExamService exams, CancellationToken ct) =>
     Results.Ok(await exams.SubmitExamAsync(UserIdOf(ctx), req, ct)));
 
-assessment.MapGet("/exams/{attemptId}/result", async (Ulid attemptId, HttpContext ctx, IExamService exams, CancellationToken ct) =>
+assessment.MapGet("/exams/{attemptId}/result", async (Guid attemptId, HttpContext ctx, IExamService exams, CancellationToken ct) =>
 {
     var result = await exams.GetResultAsync(attemptId, UserIdOf(ctx), ct);
     return result == null ? Results.NotFound() : Results.Ok(result);
@@ -438,7 +438,7 @@ var cert = api.MapGroup("/certifications");
 cert.MapGet("/", async (ICertificationService certs, CancellationToken ct) =>
     Results.Ok(await certs.GetCertificationsAsync(ct)));
 
-cert.MapGet("/{id}/readiness", async (Ulid id, HttpContext ctx, ICertificationService certs, CancellationToken ct) =>
+cert.MapGet("/{id}/readiness", async (Guid id, HttpContext ctx, ICertificationService certs, CancellationToken ct) =>
 {
     var readiness = await certs.GetReadinessAsync(UserIdOf(ctx), id, ct);
     return readiness == null ? Results.NotFound() : Results.Ok(readiness);
@@ -449,13 +449,13 @@ var insights = api.MapGroup("/insights");
 insights.MapGet("/", async (HttpContext ctx, IInsightService service, CancellationToken ct) =>
     Results.Ok(await service.GetInsightsAsync(UserIdOf(ctx), ct)));
 
-insights.MapPost("/{id}/read", async (Ulid id, HttpContext ctx, IInsightService service, CancellationToken ct) =>
+insights.MapPost("/{id}/read", async (Guid id, HttpContext ctx, IInsightService service, CancellationToken ct) =>
 {
     await service.MarkReadAsync(UserIdOf(ctx), id, ct);
     return Results.Ok();
 });
 
-insights.MapPost("/{id}/dismiss", async (Ulid id, HttpContext ctx, IInsightService service, CancellationToken ct) =>
+insights.MapPost("/{id}/dismiss", async (Guid id, HttpContext ctx, IInsightService service, CancellationToken ct) =>
 {
     await service.DismissAsync(UserIdOf(ctx), id, ct);
     return Results.Ok();
@@ -475,7 +475,7 @@ admin.MapGet("/impact-assessments", async (IImpactService impact, CancellationTo
 admin.MapPost("/update-proposals", async (CreateUpdateProposalRequest req, HttpContext ctx, IUpdateService updates, CancellationToken ct) =>
     Results.Ok(await updates.CreateAsync(req.ChangeId, req, UserIdOf(ctx), ct)));
 
-admin.MapPost("/update-proposals/{id}/approve", async (Ulid id, HttpContext ctx, IUpdateService updates, CancellationToken ct) =>
+admin.MapPost("/update-proposals/{id}/approve", async (Guid id, HttpContext ctx, IUpdateService updates, CancellationToken ct) =>
     Results.Ok(await updates.ApproveAsync(id, UserIdOf(ctx), ct)));
 
 admin.MapPost("/lab-regression/run", async (RunRegressionRequest req, IRegressionService regression, CancellationToken ct) =>
@@ -488,9 +488,8 @@ admin.MapGet("/lab-regression/runs", async (IRegressionService regression, Cance
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<PlatformDbContext>();
-    // MVP sin migraciones EF (no hay tooling en este entorno): EnsureCreated crea el esquema.
-    // Cuando el proyecto tenga migraciones, cambiar a MigrateAsync.
-    await db.Database.EnsureCreatedAsync();
+    // El esquema se crea y evoluciona con migraciones EF Core (fuente de verdad del modelo)
+    await db.Database.MigrateAsync();
     var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
     var log = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     await DbSeeder.SeedAsync(db, hasher, log);

@@ -1,293 +1,271 @@
-version: "3.9"
+# ============================================================================
+# Aprende DevOps - Stack de produccion (VPS Contabo)
+#
+# Se despliega en /opt/aprende-devops junto al checkout del repo:
+#   docker compose -f infra/docker-compose/docker-compose.prod.yml up -d
+#
+# Alcance: SOLO la plataforma. Caddy, Zot, Uptime Kuma y Vaultwarden ya corren
+# en el VPS (fuera de este archivo) y comparten la red externa `caddy_net`.
+# Ningun servicio de aqui publica puertos al host: Caddy enruta por nombre.
+#
+# Perfiles:
+#   (default)  nucleo funcional
+#   obs        observabilidad ligera (cadvisor + prometheus + grafana)
+# ============================================================================
+
+name: aprende-devops
+
+x-logging: &default-logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+x-restart-secure: &base-policy
+  restart: unless-stopped
+  security_opt: [ "no-new-privileges:true" ]
+
+networks:
+  proxy:              # la red del contenedor Caddy existente en el VPS
+    external: true
+    name: caddy_net
+  internal:
+    driver: bridge
+    internal: true    # sin salida a internet ni exposicion: db, cache, storage
+  egress:
+    driver: bridge    # salida a internet permitida, sin publicar puertos:
+                      # techwatcher (APIs publicas) y backup (Cloudflare R2)
 
 services:
-  # ----------------------------------------------------------
-  # REVERSE PROXY + SSL TERMINATION (Cloudflare Tunnel handles public SSL)
-  # ----------------------------------------------------------
-  nginx:
-    image: nginx:alpine
-    container_name: platform-nginx
-    restart: unless-stopped
-    ports:
-      - "8080:8080"  # Cloudflare Tunnel connects here
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certs:/etc/nginx/certs:ro  # optional: self-signed for local dev
-    networks:
-      - platform-internal
-    depends_on:
-      - api
-      - web
-
-  # ----------------------------------------------------------
-  # BACKEND API (.NET 9)
-  # ----------------------------------------------------------
-  api:
-    image: devops-platform/api:latest
-    container_name: platform-api
-    restart: unless-stopped
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://0.0.0.0:8080
-      - ConnectionStrings__Default=Host=postgres;Database=devops_platform;Username=postgres;Password=${POSTGRES_PASSWORD}
-      - ConnectionStrings__Redis=redis:6379
-      - MinIO__Endpoint=minio:9000
-      - MinIO__AccessKey=${MINIO_ROOT_USER}
-      - MinIO__SecretKey=${MINIO_ROOT_PASSWORD}
-      - MinIO__Bucket=devops-platform
-      - OpenIddict__Authority=http://api:8080
-      - Jwt__Key=${JWT_KEY}
-      - Jwt__Issuer=devops-platform
-      - Jwt__Audience=devops-platform
-      - AllowedOrigins__0=https://aprende-devops.edrs.xyz
-      - AllowedOrigins__1=http://localhost:5173
-    volumes:
-      - app-data:/app/data
-    networks:
-      - platform-internal
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
+  # ---------------------------------------------------------- APLICACION
+  web:
+    image: registry.edrs.xyz/aprende-devops/web:latest
+    container_name: aprende-web
+    <<: *base-policy
+    networks: [proxy]
+    logging: *default-logging
     deploy:
       resources:
-        limits:
-          cpus: "2"
-          memory: "2G"
-        reservations:
-          cpus: "0.5"
-          memory: "512M"
+        limits: { cpus: "0.25", memory: "128M" }
 
-  # ----------------------------------------------------------
-  # FRONTEND (React + Vite + Nginx static serve)
-  # ----------------------------------------------------------
-  web:
-    image: devops-platform/web:latest
-    container_name: platform-web
-    restart: unless-stopped
-    networks:
-      - platform-internal
-    # Built with: npm run build && docker build -f Dockerfile.web -t devops-platform/web:latest .
+  api:
+    image: registry.edrs.xyz/aprende-devops/api:latest
+    container_name: aprende-api
+    <<: *base-policy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+      ConnectionStrings__Default: Host=postgres;Database=devops_platform;Username=postgres;Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Redis: redis:6379
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: aprende-devops
+      Jwt__Audience: aprende-devops
+      MinIO__Endpoint: minio:9000
+      MinIO__AccessKey: ${MINIO_ROOT_USER}
+      MinIO__SecretKey: ${MINIO_ROOT_PASSWORD}
+      MinIO__Bucket: devops-platform
+      AllowedOrigins__0: https://aprende-devops.edrs.xyz
+      Docker__Host: unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # LabEngine crea labs como hermanos
+      - api-logs:/app/logs
+    networks: [proxy, internal]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: "1G" }
 
-  # ----------------------------------------------------------
-  # POSTGRESQL 16 + pgvector + pg_trgm
-  # ----------------------------------------------------------
+  workers:
+    image: registry.edrs.xyz/aprende-devops/workers:latest
+    container_name: aprende-workers
+    <<: *base-policy
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__Default: Host=postgres;Database=devops_platform;Username=postgres;Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Redis: redis:6379
+      Docker__Host: unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # jobs de limpieza y regresion de labs
+    networks: [internal]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: "512M" }
+
+  techwatcher:
+    image: registry.edrs.xyz/aprende-devops/techwatcher:latest
+    container_name: aprende-techwatcher
+    <<: *base-policy
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__Default: Host=postgres;Database=devops_platform;Username=postgres;Password=${POSTGRES_PASSWORD}
+    networks: [internal, egress]    # postgres via internal; APIs externas via egress
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: "256M" }
+
+  # ---------------------------------------------------------- DATOS
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: platform-postgres
+    container_name: aprende-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=devops_platform
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      POSTGRES_DB: devops_platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=512MB"
+      - "-c"
+      - "max_connections=100"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
-    networks:
-      - platform-internal
+      - pg-data:/var/lib/postgresql/data
+    networks: [internal]            # jamas publica puerto; admin por tunel SSH
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d devops_platform"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 6
+    logging: *default-logging
     deploy:
       resources:
-        limits:
-          cpus: "2"
-          memory: "4G"
-        reservations:
-          cpus: "0.5"
-          memory: "1G"
+        limits: { cpus: "2.0", memory: "1536M" }
 
-  # ----------------------------------------------------------
-  # REDIS 7 (Stack) - cache, streams, pub/sub
-  # ----------------------------------------------------------
   redis:
-    image: redis/redis-stack:7.2.0-v11
-    container_name: platform-redis
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    image: redis:7-alpine
+    container_name: aprende-redis
+    <<: *base-policy
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "allkeys-lru"]
     volumes:
       - redis-data:/data
-    networks:
-      - platform-internal
+    networks: [internal]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 6
+    logging: *default-logging
     deploy:
       resources:
-        limits:
-          memory: "1G"
+        limits: { cpus: "0.25", memory: "128M" }
 
-  # ----------------------------------------------------------
-  # MINIO (S3-compatible object storage)
-  # ----------------------------------------------------------
   minio:
-    image: minio/minio:RELEASE.2024-01-20T16-11-10Z
-    container_name: platform-minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: aprende-minio
+    <<: *base-policy
+    command: ["server", "/data"]
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio-data:/data
-    networks:
-      - platform-internal
+    networks: [internal]            # consola solo por tunel SSH si se necesita
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
-      timeout: 20s
+      timeout: 10s
       retries: 3
+    logging: *default-logging
     deploy:
       resources:
-        limits:
-          memory: "1G"
+        limits: { cpus: "0.5", memory: "512M" }
 
-  # ----------------------------------------------------------
-  # GRAFANA STACK (Alloy + Loki + Prometheus + Tempo + Grafana)
-  # ----------------------------------------------------------
-  alloy:
-    image: grafana/alloy:v1.5.0
-    container_name: platform-alloy
+  # ---------------------------------------------------------- BACKUPS
+  backup:
+    build:
+      context: ../../backup
+    container_name: aprende-backup
+    <<: *base-policy
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: devops_platform
+      RESTIC_REPOSITORY: s3:https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - minio-data:/data/minio:ro   # PDFs de certificados y evidencias
+    networks: [internal, egress]    # postgres via internal; R2 via egress
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: "256M" }
+
+  # ---------------------------------------------------------- OBSERVABILIDAD (perfil obs)
+  cadvisor:
+    profiles: [obs]
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: aprende-cadvisor
     restart: unless-stopped
     volumes:
-      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-    networks:
-      - platform-internal
-    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "/etc/alloy/config.alloy"]
-
-  loki:
-    image: grafana/loki:2.9.4
-    container_name: platform-loki
-    restart: unless-stopped
-    volumes:
-      - loki-data:/loki
-    networks:
-      - platform-internal
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks: [internal]
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: "128M" }
 
   prometheus:
+    profiles: [obs]
     image: prom/prometheus:v2.53.0
-    container_name: platform-prometheus
+    container_name: aprende-prometheus
     restart: unless-stopped
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    networks:
-      - platform-internal
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.enable-lifecycle"
-
-  tempo:
-    image: grafana/tempo:2.4.1
-    container_name: platform-tempo
-    restart: unless-stopped
+      - "--storage.tsdb.retention.time=7d"
     volumes:
-      - tempo-data:/var/tempo
-    networks:
-      - platform-internal
-    command:
-      - "-config.file=/etc/tempo.yaml"
-    # Note: tempo config via volume in real setup
+      - ../observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks: [internal]
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: "512M" }
 
   grafana:
+    profiles: [obs]
     image: grafana/grafana:10.4.1
-    container_name: platform-grafana
+    container_name: aprende-grafana
     restart: unless-stopped
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=https://grafana.edrs.xyz
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-    networks:
-      - platform-internal
-    depends_on:
-      - loki
-      - prometheus
-      - tempo
-
-  # ----------------------------------------------------------
-  # WORKERS (Hangfire: limpieza, insights, regresiones)
-  # ----------------------------------------------------------
-  workers:
-    image: devops-platform/workers:latest
-    container_name: platform-workers
-    restart: unless-stopped
-    environment:
-      - DOTNET_ENVIRONMENT=Production
-      - ConnectionStrings__Default=Host=postgres;Database=devops_platform;Username=postgres;Password=${POSTGRES_PASSWORD}
-      - ConnectionStrings__Redis=redis:6379
-    networks:
-      - platform-internal
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - ../observability/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    networks: [internal, proxy]     # exponer via Caddy (grafana.edrs.xyz) cuando se habilite obs
+    depends_on: [prometheus]
+    logging: *default-logging
     deploy:
       resources:
-        limits:
-          cpus: "1"
-          memory: "512M"
-        reservations:
-          cpus: "0.25"
-          memory: "128M"
-
-  # ----------------------------------------------------------
-  # TECHWATCHER (revisiones cada 6h de docs oficiales)
-  # ----------------------------------------------------------
-  techwatcher:
-    image: devops-platform/techwatcher:latest
-    container_name: platform-techwatcher
-    restart: unless-stopped
-    environment:
-      - DOTNET_ENVIRONMENT=Production
-      - ConnectionStrings__Default=Host=postgres;Database=devops_platform;Username=postgres;Password=${POSTGRES_PASSWORD}
-    networks:
-      - platform-internal
-    depends_on:
-      postgres:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: "256M"
-        reservations:
-          cpus: "0.1"
-          memory: "64M"
-
-  # ----------------------------------------------------------
-  # CLOUDFLARE TUNNEL (runs on host, not in compose - see systemd)
-  # ----------------------------------------------------------
-  # cloudflared runs as systemd service on host VM
-
-networks:
-  platform-internal:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.25.0.0/16
+        limits: { cpus: "0.5", memory: "512M" }
 
 volumes:
-  postgres-data:
+  pg-data:
   redis-data:
   minio-data:
-  loki-data:
+  api-logs:
   prometheus-data:
-  tempo-data:
   grafana-data:
-  app-data:

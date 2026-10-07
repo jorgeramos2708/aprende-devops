@@ -22,7 +22,7 @@ public class DockerContainerRuntime : IContainerRuntime
         _logger = logger;
     }
 
-    public async Task<string> CreateContainerAsync(LabEnvironment lab, Ulid attemptId, CancellationToken ct = default)
+    public async Task<string> CreateContainerAsync(LabEnvironment lab, Guid attemptId, CancellationToken ct = default)
     {
         var labels = new Dictionary<string, string>
         {

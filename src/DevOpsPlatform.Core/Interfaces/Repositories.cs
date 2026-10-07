@@ -7,35 +7,35 @@ using System.Text.Json;
 
 public interface IKnowledgeGraphRepository
 {
-    Task<KnowledgeNode?> GetByIdAsync(Ulid id, CancellationToken ct = default);
+    Task<KnowledgeNode?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<KnowledgeNode?> GetBySlugAsync(string type, string slug, string? version = null, CancellationToken ct = default);
-    Task<IReadOnlyList<KnowledgeNode>> GetChildrenAsync(Ulid parentId, CancellationToken ct = default);
+    Task<IReadOnlyList<KnowledgeNode>> GetChildrenAsync(Guid parentId, CancellationToken ct = default);
     Task<IReadOnlyList<KnowledgeNode>> GetByTypeAsync(NodeType type, CancellationToken ct = default);
-    Task<IReadOnlyList<KnowledgeEdge>> GetOutgoingEdgesAsync(Ulid nodeId, EdgeType? edgeType = null, CancellationToken ct = default);
-    Task<IReadOnlyList<KnowledgeEdge>> GetIncomingEdgesAsync(Ulid nodeId, EdgeType? edgeType = null, CancellationToken ct = default);
+    Task<IReadOnlyList<KnowledgeEdge>> GetOutgoingEdgesAsync(Guid nodeId, EdgeType? edgeType = null, CancellationToken ct = default);
+    Task<IReadOnlyList<KnowledgeEdge>> GetIncomingEdgesAsync(Guid nodeId, EdgeType? edgeType = null, CancellationToken ct = default);
     Task<KnowledgeNode> AddAsync(KnowledgeNode node, CancellationToken ct = default);
     Task<KnowledgeNode> UpdateAsync(KnowledgeNode node, CancellationToken ct = default);
     Task AddEdgeAsync(KnowledgeEdge edge, CancellationToken ct = default);
-    Task RemoveEdgeAsync(Ulid fromId, Ulid toId, EdgeType edgeType, CancellationToken ct = default);
-    Task<IReadOnlyList<Ulid>> GetPrerequisitesAsync(Ulid nodeId, CancellationToken ct = default);
-    Task<IReadOnlyList<Ulid>> GetDependentsAsync(Ulid nodeId, CancellationToken ct = default);
+    Task RemoveEdgeAsync(Guid fromId, Guid toId, EdgeType edgeType, CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> GetPrerequisitesAsync(Guid nodeId, CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> GetDependentsAsync(Guid nodeId, CancellationToken ct = default);
 }
 
 public interface ILabOrchestrator
 {
-    Task<LabSession> StartLabAsync(Ulid labEnvironmentId, Ulid userId, CancellationToken ct = default);
-    Task<LabSession?> GetSessionAsync(Ulid attemptId, CancellationToken ct = default);
-    Task<TerminalConnection> ConnectTerminalAsync(Ulid attemptId, int cols, int rows, CancellationToken ct = default);
-    Task SendTerminalInputAsync(Ulid attemptId, string input, CancellationToken ct = default);
-    Task ResizeTerminalAsync(Ulid attemptId, int cols, int rows, CancellationToken ct = default);
-    Task<LabValidationResult> ValidateLabAsync(Ulid attemptId, CancellationToken ct = default);
-    Task StopLabAsync(Ulid attemptId, CancellationToken ct = default);
+    Task<LabSession> StartLabAsync(Guid labEnvironmentId, Guid userId, CancellationToken ct = default);
+    Task<LabSession?> GetSessionAsync(Guid attemptId, CancellationToken ct = default);
+    Task<TerminalConnection> ConnectTerminalAsync(Guid attemptId, int cols, int rows, CancellationToken ct = default);
+    Task SendTerminalInputAsync(Guid attemptId, string input, CancellationToken ct = default);
+    Task ResizeTerminalAsync(Guid attemptId, int cols, int rows, CancellationToken ct = default);
+    Task<LabValidationResult> ValidateLabAsync(Guid attemptId, CancellationToken ct = default);
+    Task StopLabAsync(Guid attemptId, CancellationToken ct = default);
     Task CleanupExpiredLabsAsync(CancellationToken ct = default);
 }
 
 public record LabSession
 {
-    public Ulid AttemptId { get; init; }
+    public Guid AttemptId { get; init; }
     public string ContainerId { get; init; } = string.Empty;
     public string ContainerIp { get; init; } = string.Empty;
     public int TerminalPort { get; init; }
@@ -63,7 +63,7 @@ public record LabValidationResult
 
 public interface IContainerRuntime
 {
-    Task<string> CreateContainerAsync(LabEnvironment lab, Ulid attemptId, CancellationToken ct = default);
+    Task<string> CreateContainerAsync(LabEnvironment lab, Guid attemptId, CancellationToken ct = default);
     Task<bool> StartContainerAsync(string containerId, CancellationToken ct = default);
     Task<bool> StopContainerAsync(string containerId, CancellationToken ct = default);
     Task<bool> RemoveContainerAsync(string containerId, CancellationToken ct = default);
@@ -122,7 +122,7 @@ public interface IContentPipeline
 public record ContentImportResult
 {
     public bool Success { get; init; }
-    public Ulid? NodeId { get; init; }
+    public Guid? NodeId { get; init; }
     public string[] Errors { get; init; } = [];
     public string[] Warnings { get; init; } = [];
 }

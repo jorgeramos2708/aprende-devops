@@ -129,10 +129,10 @@ public class ExamService : IExamService
     public async Task<IReadOnlyList<Exam>> GetExamsAsync(CancellationToken ct = default)
         => await _db.Exams.Where(e => e.IsActive).OrderBy(e => e.Title).ToListAsync(ct);
 
-    public async Task<Exam?> GetExamAsync(Ulid id, CancellationToken ct = default)
+    public async Task<Exam?> GetExamAsync(Guid id, CancellationToken ct = default)
         => await _db.Exams.FirstOrDefaultAsync(e => e.Id == id && e.IsActive, ct);
 
-    public async Task<ExamStartResponse> StartExamAsync(Ulid userId, Ulid examId, CancellationToken ct = default)
+    public async Task<ExamStartResponse> StartExamAsync(Guid userId, Guid examId, CancellationToken ct = default)
     {
         var exam = await GetExamAsync(examId, ct)
             ?? throw new InvalidOperationException("Examen no encontrado.");
@@ -141,7 +141,7 @@ public class ExamService : IExamService
 
         var attempt = new ExamAttempt
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             UserId = userId,
             ExamId = exam.Id,
             Status = "in_progress",
@@ -162,7 +162,7 @@ public class ExamService : IExamService
         };
     }
 
-    public async Task<ExamResultDto> SubmitExamAsync(Ulid userId, ExamSubmitRequest req, CancellationToken ct = default)
+    public async Task<ExamResultDto> SubmitExamAsync(Guid userId, ExamSubmitRequest req, CancellationToken ct = default)
     {
         var attempt = await _db.ExamAttempts
             .Include(a => a.Exam)
@@ -222,7 +222,7 @@ public class ExamService : IExamService
         {
             _db.Insights.Add(new Insight
             {
-                Id = Ulid.NewUlid(),
+                Id = Guid.CreateVersion7(),
                 UserId = userId,
                 Type = "weakness",
                 Title = $"Repasar: {attempt.Exam.Title}",
@@ -246,7 +246,7 @@ public class ExamService : IExamService
         };
     }
 
-    public async Task<ExamResultDto?> GetResultAsync(Ulid attemptId, Ulid userId, CancellationToken ct = default)
+    public async Task<ExamResultDto?> GetResultAsync(Guid attemptId, Guid userId, CancellationToken ct = default)
     {
         var attempt = await _db.ExamAttempts
             .Include(a => a.Exam)
@@ -286,7 +286,7 @@ public class ExamService : IExamService
             if (sel.ValueKind == JsonValueKind.Object && sel.TryGetProperty("questionIds", out var ids))
             {
                 var idList = ids.EnumerateArray()
-                    .Select(e => Ulid.TryParse(e.GetString(), out var u) ? u : (Ulid?)null)
+                    .Select(e => Guid.TryParse(e.GetString(), out var u) ? u : (Guid?)null)
                     .Where(u => u.HasValue).Select(u => u!.Value).ToList();
                 picked = await _db.Questions.Where(q => idList.Contains(q.Id) && q.IsActive).ToListAsync(ct);
             }

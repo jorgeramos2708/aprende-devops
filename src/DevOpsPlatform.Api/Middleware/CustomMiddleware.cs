@@ -29,8 +29,8 @@ public class AuditLoggingMiddleware
         {
             var audit = new AuditLog
             {
-                Id = Ulid.NewUlid(),
-                UserId = Ulid.TryParse(userId, out var uid) ? uid : null,
+                Id = Guid.CreateVersion7(),
+                UserId = Guid.TryParse(userId, out var uid) ? uid : null,
                 Action = $"{context.Request.Method} {context.Request.Path}",
                 EntityType = ExtractEntityType(context.Request.Path),
                 EntityId = ExtractEntityId(context.Request.Path),
@@ -55,10 +55,10 @@ public class AuditLoggingMiddleware
         return null;
     }
 
-    private static Ulid? ExtractEntityId(PathString path)
+    private static Guid? ExtractEntityId(PathString path)
     {
         var segments = path.Value?.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments?.Length >= 4 && segments[0] == "api" && Ulid.TryParse(segments[3], out var id))
+        if (segments?.Length >= 4 && segments[0] == "api" && Guid.TryParse(segments[3], out var id))
             return id;
         return null;
     }

@@ -34,7 +34,7 @@ public class LabOrchestrator : ILabOrchestrator
         _services = services;
     }
 
-    public async Task<LabSession> StartLabAsync(Ulid labEnvironmentId, Ulid userId, CancellationToken ct = default)
+    public async Task<LabSession> StartLabAsync(Guid labEnvironmentId, Guid userId, CancellationToken ct = default)
     {
         var lab = await _db.LabEnvironments
             .FirstOrDefaultAsync(l => l.Id == labEnvironmentId && l.IsActive, ct);
@@ -60,7 +60,7 @@ public class LabOrchestrator : ILabOrchestrator
         // Create new attempt
         var attempt = new LabAttempt
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             UserId = userId,
             LabEnvironmentId = labEnvironmentId,
             Status = LabStatus.Provisioning,
@@ -141,7 +141,7 @@ public class LabOrchestrator : ILabOrchestrator
         };
     }
 
-    public async Task<LabSession?> GetSessionAsync(Ulid attemptId, CancellationToken ct = default)
+    public async Task<LabSession?> GetSessionAsync(Guid attemptId, CancellationToken ct = default)
     {
         var attempt = await _db.LabAttempts
             .Include(a => a.LabEnvironment)
@@ -164,7 +164,7 @@ public class LabOrchestrator : ILabOrchestrator
         };
     }
 
-    public async Task<TerminalConnection> ConnectTerminalAsync(Ulid attemptId, int cols, int rows, CancellationToken ct = default)
+    public async Task<TerminalConnection> ConnectTerminalAsync(Guid attemptId, int cols, int rows, CancellationToken ct = default)
     {
         var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
         if (attempt == null || attempt.ContainerId == null)
@@ -188,7 +188,7 @@ public class LabOrchestrator : ILabOrchestrator
         };
     }
 
-    public async Task SendTerminalInputAsync(Ulid attemptId, string input, CancellationToken ct = default)
+    public async Task SendTerminalInputAsync(Guid attemptId, string input, CancellationToken ct = default)
     {
         var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
         if (attempt?.ContainerId == null) return;
@@ -205,7 +205,7 @@ public class LabOrchestrator : ILabOrchestrator
         }
     }
 
-    public async Task ResizeTerminalAsync(Ulid attemptId, int cols, int rows, CancellationToken ct = default)
+    public async Task ResizeTerminalAsync(Guid attemptId, int cols, int rows, CancellationToken ct = default)
     {
         var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
         if (attempt?.ContainerId == null) return;
@@ -213,7 +213,7 @@ public class LabOrchestrator : ILabOrchestrator
         await _containerRuntime.ExecAsync(attempt.ContainerId, new[] { "sh", "-c", $"resize -s {rows} {cols}" }, ct);
     }
 
-    public async Task<LabValidationResult> ValidateLabAsync(Ulid attemptId, CancellationToken ct = default)
+    public async Task<LabValidationResult> ValidateLabAsync(Guid attemptId, CancellationToken ct = default)
     {
         var attempt = await _db.LabAttempts
             .Include(a => a.LabEnvironment)
@@ -282,7 +282,7 @@ public class LabOrchestrator : ILabOrchestrator
         }
     }
 
-    public async Task StopLabAsync(Ulid attemptId, CancellationToken ct = default)
+    public async Task StopLabAsync(Guid attemptId, CancellationToken ct = default)
     {
         var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
         if (attempt == null) return;
@@ -326,7 +326,7 @@ public class LabOrchestrator : ILabOrchestrator
         }
     }
 
-    private static string GenerateSessionToken(Ulid attemptId)
+    private static string GenerateSessionToken(Guid attemptId)
     {
         return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{attemptId}:{DateTimeOffset.UtcNow.Ticks}"));
     }
@@ -341,7 +341,7 @@ public class LabOrchestrator : ILabOrchestrator
         catch { return 1800; }
     }
 
-    private static async Task RunSetupScriptAsync(LabEnvironment lab, Ulid attemptId, CancellationToken ct)
+    private static async Task RunSetupScriptAsync(LabEnvironment lab, Guid attemptId, CancellationToken ct)
     {
         // Setup runs in a temporary container or the main container before user access
         // For simplicity, we'll run it in the main container after creation

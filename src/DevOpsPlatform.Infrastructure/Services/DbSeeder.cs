@@ -43,7 +43,7 @@ public static class DbSeeder
 
         var linuxLab = new LabEnvironment
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             Name = "Linux: terminal basica",
             Slug = "linux-terminal-basica",
             Description = "Practica comandos basicos en una terminal Ubuntu real.",
@@ -57,7 +57,7 @@ public static class DbSeeder
 
         var exam = new Exam
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             Technology = "linux",
             Slug = "linux-basic",
             Title = "Linux basico: examen de nivel",
@@ -90,7 +90,7 @@ public static class DbSeeder
 
         var cert = new Certification
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             Code = "LINUX-ESS",
             Name = "Linux Essentials (simulacro)",
             Vendor = "Comunidad",
@@ -111,7 +111,7 @@ public static class DbSeeder
         db.TechnologySources.AddRange([
             new TechnologySource
             {
-                Id = Ulid.NewUlid(),
+                Id = Guid.CreateVersion7(),
                 Technology = "docker",
                 SourceType = "github_releases",
                 SourceUrl = "moby/moby",
@@ -119,7 +119,7 @@ public static class DbSeeder
             },
             new TechnologySource
             {
-                Id = Ulid.NewUlid(),
+                Id = Guid.CreateVersion7(),
                 Technology = "ubuntu",
                 SourceType = "docker_tags",
                 SourceUrl = "library/ubuntu",
@@ -133,7 +133,7 @@ public static class DbSeeder
 
     private static KnowledgeNode TechNode(string slug, string title, string desc, string version) => new()
     {
-        Id = Ulid.NewUlid(),
+        Id = Guid.CreateVersion7(),
         Type = NodeType.Technology,
         Slug = slug,
         Title = title,
@@ -144,7 +144,7 @@ public static class DbSeeder
 
     private static KnowledgeNode Lesson(KnowledgeNode parent, string slug, string title, string level, string topic, string markdown) => new()
     {
-        Id = Ulid.NewUlid(),
+        Id = Guid.CreateVersion7(),
         Type = NodeType.Lesson,
         Slug = slug,
         Title = title,
@@ -160,7 +160,7 @@ public static class DbSeeder
 
     private static CertificationMapping MkMapping(Certification cert, string domain, decimal domainWeight, KnowledgeNode node) => new()
     {
-        Id = Ulid.NewUlid(),
+        Id = Guid.CreateVersion7(),
         CertificationId = cert.Id,
         DomainName = domain,
         DomainWeight = domainWeight,
@@ -172,7 +172,7 @@ public static class DbSeeder
         string technology, string? topic, string level, Difficulty difficulty,
         QuestionType type, string prompt, string[] options, string correct, string? explanation) => new()
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             Technology = technology,
             Topic = topic,
             Level = level,

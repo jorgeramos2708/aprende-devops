@@ -13,7 +13,7 @@ public class TerminalStreamManager : BackgroundService
 {
     private readonly IContainerRuntime _containerRuntime;
     private readonly ILogger<TerminalStreamManager> _logger;
-    private readonly ConcurrentDictionary<Ulid, TerminalSession> _sessions = new();
+    private readonly ConcurrentDictionary<Guid, TerminalSession> _sessions = new();
 
     public TerminalStreamManager(IContainerRuntime containerRuntime, ILogger<TerminalStreamManager> logger)
     {
@@ -21,7 +21,7 @@ public class TerminalStreamManager : BackgroundService
         _logger = logger;
     }
 
-    public async Task<TerminalSession> StartSessionAsync(Ulid attemptId, string containerId, int cols, int rows, CancellationToken ct = default)
+    public async Task<TerminalSession> StartSessionAsync(Guid attemptId, string containerId, int cols, int rows, CancellationToken ct = default)
     {
         var session = new TerminalSession
         {
@@ -42,7 +42,7 @@ public class TerminalStreamManager : BackgroundService
         return session;
     }
 
-    public async Task StopSessionAsync(Ulid attemptId)
+    public async Task StopSessionAsync(Guid attemptId)
     {
         if (_sessions.TryRemove(attemptId, out var session))
         {
@@ -52,7 +52,7 @@ public class TerminalStreamManager : BackgroundService
         }
     }
 
-    public async Task SendInputAsync(Ulid attemptId, string input)
+    public async Task SendInputAsync(Guid attemptId, string input)
     {
         if (_sessions.TryGetValue(attemptId, out var session))
         {
@@ -60,7 +60,7 @@ public class TerminalStreamManager : BackgroundService
         }
     }
 
-    public async Task ResizeAsync(Ulid attemptId, int cols, int rows)
+    public async Task ResizeAsync(Guid attemptId, int cols, int rows)
     {
         if (_sessions.TryGetValue(attemptId, out var session))
         {
@@ -71,7 +71,7 @@ public class TerminalStreamManager : BackgroundService
         }
     }
 
-    public IAsyncEnumerable<TerminalOutput> GetOutputAsync(Ulid attemptId, CancellationToken ct = default)
+    public IAsyncEnumerable<TerminalOutput> GetOutputAsync(Guid attemptId, CancellationToken ct = default)
     {
         if (_sessions.TryGetValue(attemptId, out var session))
         {
@@ -153,7 +153,7 @@ public class TerminalStreamManager : BackgroundService
 
     public class TerminalSession
     {
-        public Ulid AttemptId { get; set; }
+        public Guid AttemptId { get; set; }
         public string ContainerId { get; set; } = string.Empty;
         public int Cols { get; set; }
         public int Rows { get; set; }

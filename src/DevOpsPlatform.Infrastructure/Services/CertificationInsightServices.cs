@@ -21,7 +21,7 @@ public class CertificationService : ICertificationService
     public async Task<IReadOnlyList<Certification>> GetCertificationsAsync(CancellationToken ct = default)
         => await _db.Certifications.Where(c => c.IsActive).OrderBy(c => c.Code).ToListAsync(ct);
 
-    public async Task<CertificationReadinessDto?> GetReadinessAsync(Ulid userId, Ulid certificationId, CancellationToken ct = default)
+    public async Task<CertificationReadinessDto?> GetReadinessAsync(Guid userId, Guid certificationId, CancellationToken ct = default)
     {
         var cert = await _db.Certifications
             .Include(c => c.Mappings)
@@ -74,7 +74,7 @@ public class InsightService : IInsightService
 
     public InsightService(PlatformDbContext db) => _db = db;
 
-    public async Task<IReadOnlyList<InsightDto>> GetInsightsAsync(Ulid userId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<InsightDto>> GetInsightsAsync(Guid userId, CancellationToken ct = default)
     {
         var items = await _db.Insights
             .Where(i => i.UserId == userId && !i.IsDismissed)
@@ -97,7 +97,7 @@ public class InsightService : IInsightService
         }).ToList();
     }
 
-    public async Task MarkReadAsync(Ulid userId, Ulid id, CancellationToken ct = default)
+    public async Task MarkReadAsync(Guid userId, Guid id, CancellationToken ct = default)
     {
         var insight = await _db.Insights.FirstOrDefaultAsync(i => i.Id == id && i.UserId == userId, ct);
         if (insight == null) return;
@@ -105,7 +105,7 @@ public class InsightService : IInsightService
         await _db.SaveChangesAsync(ct);
     }
 
-    public async Task DismissAsync(Ulid userId, Ulid id, CancellationToken ct = default)
+    public async Task DismissAsync(Guid userId, Guid id, CancellationToken ct = default)
     {
         var insight = await _db.Insights.FirstOrDefaultAsync(i => i.Id == id && i.UserId == userId, ct);
         if (insight == null) return;

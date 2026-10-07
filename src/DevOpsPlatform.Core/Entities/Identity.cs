@@ -1,6 +1,6 @@
 namespace DevOpsPlatform.Core.Entities;
 
-public record ApplicationUser : Entity<Ulid>
+public record ApplicationUser : Entity<Guid>
 {
     public string Email { get; init; } = string.Empty;
     public string PasswordHash { get; init; } = string.Empty;
@@ -10,19 +10,19 @@ public record ApplicationUser : Entity<Ulid>
     public DateTimeOffset? LastLoginAt { get; set; }
 }
 
-public record RefreshToken : Entity<Ulid>
+public record RefreshToken : Entity<Guid>
 {
-    public Ulid UserId { get; init; }
+    public Guid UserId { get; init; }
     public string TokenHash { get; init; } = string.Empty;
     public DateTimeOffset ExpiresAt { get; init; }
     public DateTimeOffset? RevokedAt { get; set; }
     public DateTimeOffset? ReplacedAt { get; set; }
 }
 
-public record UserProgress : Entity<Ulid>
+public record UserProgress : Entity<Guid>
 {
-    public Ulid UserId { get; init; }
-    public Ulid NodeId { get; init; }
+    public Guid UserId { get; init; }
+    public Guid NodeId { get; init; }
     public KnowledgeNode Node { get; init; } = null!;
     public string Status { get; set; } = "not_started"; // not_started, in_progress, completed, mastered
     public decimal? Score { get; set; }

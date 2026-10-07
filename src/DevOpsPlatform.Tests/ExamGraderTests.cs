@@ -10,7 +10,7 @@ public class ExamGraderTests
 {
     private static Question SingleChoice(string correct, decimal? maxScore = null) => new()
     {
-        Id = Ulid.NewUlid(),
+        Id = Guid.CreateVersion7(),
         Technology = "linux",
         Level = "basic",
         QuestionType = QuestionType.SingleChoice,

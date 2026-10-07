@@ -14,12 +14,12 @@ public record PagedResult<T>
 
 public record LabStartRequest
 {
-    public Ulid LabEnvironmentId { get; init; }
+    public Guid LabEnvironmentId { get; init; }
 }
 
 public record LabStartResponse
 {
-    public Ulid AttemptId { get; init; }
+    public Guid AttemptId { get; init; }
     public string ContainerId { get; init; } = string.Empty;
     public string WebSocketUrl { get; init; } = string.Empty;
     public string SessionToken { get; init; } = string.Empty;
@@ -47,19 +47,19 @@ public record TerminalOutput
 
 public record ExamStartRequest
 {
-    public Ulid ExamId { get; init; }
+    public Guid ExamId { get; init; }
 }
 
 public record ExamStartResponse
 {
-    public Ulid AttemptId { get; init; }
+    public Guid AttemptId { get; init; }
     public IReadOnlyList<ExamQuestionDto> Questions { get; init; } = Array.Empty<ExamQuestionDto>();
     public DateTimeOffset ExpiresAt { get; init; }
 }
 
 public record ExamQuestionDto
 {
-    public Ulid QuestionId { get; init; }
+    public Guid QuestionId { get; init; }
     public int Order { get; init; }
     public string Prompt { get; init; } = string.Empty;
     public QuestionType QuestionType { get; init; }
@@ -69,20 +69,20 @@ public record ExamQuestionDto
 
 public record ExamSubmitRequest
 {
-    public Ulid AttemptId { get; init; }
+    public Guid AttemptId { get; init; }
     public IReadOnlyList<ExamAnswerDto> Answers { get; init; } = Array.Empty<ExamAnswerDto>();
 }
 
 public record ExamAnswerDto
 {
-    public Ulid QuestionId { get; init; }
+    public Guid QuestionId { get; init; }
     public JsonElement Answer { get; init; }
     public int TimeSpentSeconds { get; init; }
 }
 
 public record ExamResultDto
 {
-    public Ulid AttemptId { get; init; }
+    public Guid AttemptId { get; init; }
     public decimal Score { get; init; }
     public decimal MaxScore { get; init; }
     public decimal Percentage { get; init; }
@@ -93,7 +93,7 @@ public record ExamResultDto
 
 public record QuestionResultDto
 {
-    public Ulid QuestionId { get; init; }
+    public Guid QuestionId { get; init; }
     public bool Correct { get; init; }
     public decimal Score { get; init; }
     public decimal MaxScore { get; init; }
@@ -104,7 +104,7 @@ public record QuestionResultDto
 
 public record ProgressUpdateRequest
 {
-    public Ulid NodeId { get; init; }
+    public Guid NodeId { get; init; }
     public string Status { get; init; } = string.Empty; // not_started, in_progress, completed, mastered
     public decimal? Score { get; init; }
     public int TimeSpentSeconds { get; init; } = 0;
@@ -112,7 +112,7 @@ public record ProgressUpdateRequest
 
 public record UserProgressDto
 {
-    public Ulid NodeId { get; init; }
+    public Guid NodeId { get; init; }
     public string NodeTitle { get; init; } = string.Empty;
     public NodeType NodeType { get; init; }
     public string Status { get; init; } = string.Empty;
@@ -131,13 +131,13 @@ public record SkillAssessmentDto
     public decimal Proficiency { get; init; }
     public decimal Confidence { get; init; }
     public int EvidenceCount { get; init; }
-    public IReadOnlyList<Ulid> RelatedNodeIds { get; init; } = Array.Empty<Ulid>();
+    public IReadOnlyList<Guid> RelatedNodeIds { get; init; } = Array.Empty<Guid>();
     public DateTimeOffset? LastAssessedAt { get; init; }
 }
 
 public record InsightDto
 {
-    public Ulid Id { get; init; }
+    public Guid Id { get; init; }
     public string Type { get; init; } = string.Empty;
     public string Title { get; init; } = string.Empty;
     public string? Description { get; init; }
@@ -150,12 +150,12 @@ public record InsightDto
 
 public record CertificationReadinessDto
 {
-    public Ulid CertificationId { get; init; }
+    public Guid CertificationId { get; init; }
     public string CertificationCode { get; init; } = string.Empty;
     public string CertificationName { get; init; } = string.Empty;
     public decimal OverallReadiness { get; init; }
     public IReadOnlyList<DomainReadinessDto> Domains { get; init; } = Array.Empty<DomainReadinessDto>();
-    public IReadOnlyList<Ulid> RecommendedNodes { get; init; } = Array.Empty<Ulid>();
+    public IReadOnlyList<Guid> RecommendedNodes { get; init; } = Array.Empty<Guid>();
 }
 
 public record DomainReadinessDto
@@ -163,13 +163,13 @@ public record DomainReadinessDto
     public string DomainName { get; init; } = string.Empty;
     public decimal Weight { get; init; }
     public decimal Readiness { get; init; }
-    public IReadOnlyList<Ulid> CoveredNodes { get; init; } = Array.Empty<Ulid>();
-    public IReadOnlyList<Ulid> MissingNodes { get; init; } = Array.Empty<Ulid>();
+    public IReadOnlyList<Guid> CoveredNodes { get; init; } = Array.Empty<Guid>();
+    public IReadOnlyList<Guid> MissingNodes { get; init; } = Array.Empty<Guid>();
 }
 
 public record TechChangeDto
 {
-    public Ulid Id { get; init; }
+    public Guid Id { get; init; }
     public string Technology { get; init; } = string.Empty;
     public string ChangeType { get; init; } = string.Empty;
     public string? PreviousVersion { get; init; }
@@ -183,7 +183,7 @@ public record TechChangeDto
 
 public record AffectedItemDto
 {
-    public Ulid NodeId { get; init; }
+    public Guid NodeId { get; init; }
     public string NodeTitle { get; init; } = string.Empty;
     public NodeType NodeType { get; init; }
     public string ImpactLevel { get; init; } = string.Empty;
@@ -192,8 +192,8 @@ public record AffectedItemDto
 
 public record UpdateProposalDto
 {
-    public Ulid Id { get; init; }
-    public Ulid ChangeId { get; init; }
+    public Guid Id { get; init; }
+    public Guid ChangeId { get; init; }
     public string Title { get; init; } = string.Empty;
     public string? Description { get; init; }
     public string Status { get; init; } = string.Empty;
@@ -205,7 +205,7 @@ public record UpdateProposalDto
 
 public record ProposedChangeDto
 {
-    public Ulid NodeId { get; init; }
+    public Guid NodeId { get; init; }
     public string NodeTitle { get; init; } = string.Empty;
     public string Action { get; init; } = string.Empty; // update, replace, deprecate
     public JsonElement? NewContent { get; init; }
@@ -219,7 +219,7 @@ public record RefreshRequest(string RefreshToken);
 
 public record UserDto
 {
-    public Ulid Id { get; init; }
+    public Guid Id { get; init; }
     public string Email { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
     public string[] Roles { get; init; } = [];
@@ -234,13 +234,13 @@ public record AuthResponse
 
 public record CreateUpdateProposalRequest
 {
-    public Ulid ChangeId { get; init; }
+    public Guid ChangeId { get; init; }
     public string Title { get; init; } = string.Empty;
     public string? Description { get; init; }
 }
 
 public record RunRegressionRequest
 {
-    public Ulid? SuiteId { get; init; }
+    public Guid? SuiteId { get; init; }
     public string TechnologyVersion { get; init; } = "latest";
 }

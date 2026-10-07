@@ -10,11 +10,11 @@ using System.Text.Json;
 public interface ILabService
 {
     Task<PagedResult<LabEnvironment>> GetLabsAsync(string? technology = null, LabType? type = null, int page = 1, int pageSize = 20);
-    Task<LabEnvironment?> GetLabAsync(Ulid id);
-    Task<LabEnvironment> CreateLabAsync(CreateLabRequest request, Ulid createdBy);
-    Task<LabEnvironment> UpdateLabAsync(Ulid id, UpdateLabRequest request);
-    Task DeleteLabAsync(Ulid id);
-    Task<IReadOnlyList<LabAttempt>> GetUserAttemptsAsync(Ulid userId, Ulid? labId = null);
+    Task<LabEnvironment?> GetLabAsync(Guid id);
+    Task<LabEnvironment> CreateLabAsync(CreateLabRequest request, Guid createdBy);
+    Task<LabEnvironment> UpdateLabAsync(Guid id, UpdateLabRequest request);
+    Task DeleteLabAsync(Guid id);
+    Task<IReadOnlyList<LabAttempt>> GetUserAttemptsAsync(Guid userId, Guid? labId = null);
 }
 
 public class LabService : ILabService
@@ -64,14 +64,14 @@ public class LabService : ILabService
         catch { return false; }
     }
 
-    public async Task<LabEnvironment?> GetLabAsync(Ulid id)
+    public async Task<LabEnvironment?> GetLabAsync(Guid id)
         => await _db.LabEnvironments.FirstOrDefaultAsync(l => l.Id == id);
 
-    public async Task<LabEnvironment> CreateLabAsync(CreateLabRequest request, Ulid createdBy)
+    public async Task<LabEnvironment> CreateLabAsync(CreateLabRequest request, Guid createdBy)
     {
         var lab = new LabEnvironment
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             Name = request.Name,
             Slug = request.Slug.ToLowerInvariant().Replace(" ", "-"),
             Description = request.Description,
@@ -99,7 +99,7 @@ public class LabService : ILabService
         return lab;
     }
 
-    public async Task<LabEnvironment> UpdateLabAsync(Ulid id, UpdateLabRequest request)
+    public async Task<LabEnvironment> UpdateLabAsync(Guid id, UpdateLabRequest request)
     {
         var lab = await _db.LabEnvironments.FindAsync(id);
         if (lab == null) throw new InvalidOperationException("Lab not found");
@@ -124,7 +124,7 @@ public class LabService : ILabService
         return lab;
     }
 
-    public async Task DeleteLabAsync(Ulid id)
+    public async Task DeleteLabAsync(Guid id)
     {
         var lab = await _db.LabEnvironments.FindAsync(id);
         if (lab == null) throw new InvalidOperationException("Lab not found");
@@ -133,7 +133,7 @@ public class LabService : ILabService
         await _db.SaveChangesAsync();
     }
 
-    public async Task<IReadOnlyList<LabAttempt>> GetUserAttemptsAsync(Ulid userId, Ulid? labId = null)
+    public async Task<IReadOnlyList<LabAttempt>> GetUserAttemptsAsync(Guid userId, Guid? labId = null)
     {
         var query = _db.LabAttempts
             .Include(a => a.LabEnvironment)

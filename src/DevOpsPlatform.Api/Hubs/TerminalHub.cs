@@ -30,7 +30,7 @@ public class TerminalHub : Hub
 
         // Validate token and get attempt ID
         var attemptIdStr = await _redis.GetDatabase().StringGetAsync($"lab:terminal:{sessionToken}");
-        if (!attemptIdStr.HasValue || !Ulid.TryParse(attemptIdStr, out var attemptId))
+        if (!attemptIdStr.HasValue || !Guid.TryParse(attemptIdStr, out var attemptId))
         {
             Context.Abort();
             return;
@@ -48,7 +48,7 @@ public class TerminalHub : Hub
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        if (Context.Items.TryGetValue("AttemptId", out var attemptIdObj) && attemptIdObj is Ulid attemptId)
+        if (Context.Items.TryGetValue("AttemptId", out var attemptIdObj) && attemptIdObj is Guid attemptId)
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"lab:{attemptId}");
             _logger.LogInformation("Terminal disconnected: {ConnectionId} for attempt {AttemptId}", Context.ConnectionId, attemptId);
@@ -58,7 +58,7 @@ public class TerminalHub : Hub
 
     public async Task SendInput(TerminalInput input)
     {
-        if (!Context.Items.TryGetValue("AttemptId", out var attemptIdObj) || attemptIdObj is not Ulid attemptId)
+        if (!Context.Items.TryGetValue("AttemptId", out var attemptIdObj) || attemptIdObj is not Guid attemptId)
             return;
 
         var session = await _orchestrator.GetSessionAsync(attemptId);
@@ -72,7 +72,7 @@ public class TerminalHub : Hub
 
     public async Task Resize(TerminalResizeRequest resize)
     {
-        if (!Context.Items.TryGetValue("AttemptId", out var attemptIdObj) || attemptIdObj is not Ulid attemptId)
+        if (!Context.Items.TryGetValue("AttemptId", out var attemptIdObj) || attemptIdObj is not Guid attemptId)
             return;
 
         await _orchestrator.ResizeTerminalAsync(attemptId, resize.Cols, resize.Rows);
@@ -84,7 +84,7 @@ public class NotificationHub : Hub
     public override async Task OnConnectedAsync()
     {
         var userId = Context.User?.FindFirst("sub")?.Value;
-        if (!string.IsNullOrEmpty(userId) && Ulid.TryParse(userId, out var uid))
+        if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var uid))
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, $"user:{uid}");
         }
@@ -94,7 +94,7 @@ public class NotificationHub : Hub
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var userId = Context.User?.FindFirst("sub")?.Value;
-        if (!string.IsNullOrEmpty(userId) && Ulid.TryParse(userId, out var uid))
+        if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var uid))
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"user:{uid}");
         }

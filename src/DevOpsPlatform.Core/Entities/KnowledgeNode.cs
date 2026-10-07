@@ -11,7 +11,7 @@ public abstract record Entity<TId> where TId : notnull
     public DateTimeOffset UpdatedAt { get; init; } = DateTimeOffset.UtcNow;
 }
 
-public record KnowledgeNode : Entity<Ulid>
+public record KnowledgeNode : Entity<Guid>
 {
     public NodeType Type { get; init; }
     public string Slug { get; init; } = string.Empty;
@@ -19,7 +19,7 @@ public record KnowledgeNode : Entity<Ulid>
     public JsonDocument? Content { get; init; }
     public string? Version { get; init; }
     public JsonDocument Metadata { get; init; } = JsonDocument.Parse("{}");
-    public Ulid? ParentId { get; init; }
+    public Guid? ParentId { get; init; }
     public KnowledgeNode? Parent { get; init; }
     public ICollection<KnowledgeNode> Children { get; init; } = new List<KnowledgeNode>();
     public ICollection<KnowledgeEdge> OutgoingEdges { get; init; } = new List<KnowledgeEdge>();
@@ -28,9 +28,9 @@ public record KnowledgeNode : Entity<Ulid>
 
 public record KnowledgeEdge
 {
-    public Ulid FromId { get; init; }
+    public Guid FromId { get; init; }
     public KnowledgeNode FromNode { get; init; } = null!;
-    public Ulid ToId { get; init; }
+    public Guid ToId { get; init; }
     public KnowledgeNode ToNode { get; init; } = null!;
     public EdgeType EdgeType { get; init; }
     public int Weight { get; init; } = 1;
@@ -38,7 +38,7 @@ public record KnowledgeEdge
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
 }
 
-public record LabEnvironment : Entity<Ulid>
+public record LabEnvironment : Entity<Guid>
 {
     public string Name { get; set; } = string.Empty;
     public string Slug { get; init; } = string.Empty;
@@ -55,10 +55,10 @@ public record LabEnvironment : Entity<Ulid>
     public ICollection<LabAttempt> Attempts { get; init; } = new List<LabAttempt>();
 }
 
-public record LabAttempt : Entity<Ulid>
+public record LabAttempt : Entity<Guid>
 {
-    public Ulid UserId { get; init; }
-    public Ulid LabEnvironmentId { get; init; }
+    public Guid UserId { get; init; }
+    public Guid LabEnvironmentId { get; init; }
     public LabStatus Status { get; set; } = LabStatus.Pending;
     public string? ContainerId { get; set; }
     public string? ContainerIp { get; init; }
@@ -72,7 +72,7 @@ public record LabAttempt : Entity<Ulid>
     public LabEnvironment LabEnvironment { get; init; } = null!;
 }
 
-public record Question : Entity<Ulid>
+public record Question : Entity<Guid>
 {
     public string Technology { get; init; } = string.Empty;
     public string? Topic { get; init; }
@@ -93,9 +93,9 @@ public record Question : Entity<Ulid>
     public ICollection<QuestionVersion> Versions { get; init; } = new List<QuestionVersion>();
 }
 
-public record QuestionVersion : Entity<Ulid>
+public record QuestionVersion : Entity<Guid>
 {
-    public Ulid QuestionId { get; init; }
+    public Guid QuestionId { get; init; }
     public Question Question { get; init; } = null!;
     public int Version { get; init; }
     public string Prompt { get; init; } = string.Empty;
@@ -103,11 +103,11 @@ public record QuestionVersion : Entity<Ulid>
     public JsonDocument CorrectAnswer { get; init; } = null!;
     public string? Explanation { get; init; }
     public string? TechnologyVersion { get; init; }
-    public Ulid? ChangedBy { get; init; }
+    public Guid? ChangedBy { get; init; }
     public string? ChangeReason { get; init; }
 }
 
-public record Exam : Entity<Ulid>
+public record Exam : Entity<Guid>
 {
     public string? Technology { get; init; }
     public string Slug { get; init; } = string.Empty;
@@ -123,10 +123,10 @@ public record Exam : Entity<Ulid>
     public ICollection<ExamAttempt> Attempts { get; init; } = new List<ExamAttempt>();
 }
 
-public record ExamAttempt : Entity<Ulid>
+public record ExamAttempt : Entity<Guid>
 {
-    public Ulid UserId { get; init; }
-    public Ulid ExamId { get; init; }
+    public Guid UserId { get; init; }
+    public Guid ExamId { get; init; }
     public string Status { get; init; } = "in_progress"; // in_progress, submitted, graded, reviewed
     public decimal? Score { get; init; }
     public decimal? MaxScore { get; init; }
@@ -139,7 +139,7 @@ public record ExamAttempt : Entity<Ulid>
     public Exam Exam { get; init; } = null!;
 }
 
-public record Certification : Entity<Ulid>
+public record Certification : Entity<Guid>
 {
     public string Code { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
@@ -152,19 +152,19 @@ public record Certification : Entity<Ulid>
     public ICollection<CertificationMapping> Mappings { get; init; } = new List<CertificationMapping>();
 }
 
-public record CertificationMapping : Entity<Ulid>
+public record CertificationMapping : Entity<Guid>
 {
-    public Ulid CertificationId { get; init; }
+    public Guid CertificationId { get; init; }
     public Certification Certification { get; init; } = null!;
     public string DomainName { get; init; } = string.Empty;
     public decimal DomainWeight { get; init; }
-    public Ulid NodeId { get; init; }
+    public Guid NodeId { get; init; }
     public KnowledgeNode Node { get; init; } = null!;
     public decimal CoverageWeight { get; init; } = 1;
     public JsonDocument Metadata { get; init; } = JsonDocument.Parse("{}");
 }
 
-public record TechnologySource : Entity<Ulid>
+public record TechnologySource : Entity<Guid>
 {
     public string Technology { get; init; } = string.Empty;
     public string SourceType { get; init; } = string.Empty;
@@ -179,10 +179,10 @@ public record TechnologySource : Entity<Ulid>
     public JsonDocument Metadata { get; init; } = JsonDocument.Parse("{}");
 }
 
-public record TechnologyChange : Entity<Ulid>
+public record TechnologyChange : Entity<Guid>
 {
     public string Technology { get; init; } = string.Empty;
-    public Ulid? SourceId { get; init; }
+    public Guid? SourceId { get; init; }
     public string ChangeType { get; init; } = string.Empty;
     public string? PreviousVersion { get; init; }
     public string? NewVersion { get; init; }
@@ -195,9 +195,9 @@ public record TechnologyChange : Entity<Ulid>
     public JsonDocument Metadata { get; init; } = JsonDocument.Parse("{}");
 }
 
-public record ImpactAssessment : Entity<Ulid>
+public record ImpactAssessment : Entity<Guid>
 {
-    public Ulid ChangeId { get; init; }
+    public Guid ChangeId { get; init; }
     public TechnologyChange Change { get; init; } = null!;
     public JsonDocument AffectedNodes { get; init; } = JsonDocument.Parse("[]");
     public JsonDocument AffectedLabs { get; init; } = JsonDocument.Parse("[]");
@@ -207,26 +207,26 @@ public record ImpactAssessment : Entity<Ulid>
     public string OverallImpact { get; init; } = "low";
     public string? Recommendation { get; init; }
     public DateTimeOffset AssessedAt { get; init; } = DateTimeOffset.UtcNow;
-    public Ulid? AssessedBy { get; init; }
+    public Guid? AssessedBy { get; init; }
 }
 
-public record UpdateProposal : Entity<Ulid>
+public record UpdateProposal : Entity<Guid>
 {
-    public Ulid ChangeId { get; init; }
+    public Guid ChangeId { get; init; }
     public TechnologyChange Change { get; init; } = null!;
     public string Title { get; init; } = string.Empty;
     public string? Description { get; init; }
     public JsonDocument ProposedChanges { get; init; } = JsonDocument.Parse("[]");
     public string Status { get; init; } = "draft";
-    public Ulid? CreatedBy { get; init; }
-    public Ulid? ReviewedBy { get; init; }
+    public Guid? CreatedBy { get; init; }
+    public Guid? ReviewedBy { get; init; }
     public DateTimeOffset? ReviewedAt { get; init; }
     public DateTimeOffset? AppliedAt { get; init; }
 }
 
-public record LabRegressionSuite : Entity<Ulid>
+public record LabRegressionSuite : Entity<Guid>
 {
-    public Ulid LabEnvironmentId { get; init; }
+    public Guid LabEnvironmentId { get; init; }
     public LabEnvironment LabEnvironment { get; init; } = null!;
     public string Name { get; init; } = string.Empty;
     public string TestScript { get; init; } = string.Empty;
@@ -236,9 +236,9 @@ public record LabRegressionSuite : Entity<Ulid>
     public ICollection<LabRegressionRun> Runs { get; init; } = new List<LabRegressionRun>();
 }
 
-public record LabRegressionRun : Entity<Ulid>
+public record LabRegressionRun : Entity<Guid>
 {
-    public Ulid SuiteId { get; init; }
+    public Guid SuiteId { get; init; }
     public LabRegressionSuite Suite { get; init; } = null!;
     public string TechnologyVersion { get; init; } = string.Empty;
     public string Status { get; set; } = string.Empty; // pass, warning, fail, error
@@ -249,9 +249,9 @@ public record LabRegressionRun : Entity<Ulid>
     public JsonDocument Metadata { get; init; } = JsonDocument.Parse("{}");
 }
 
-public record UserSkill : Entity<Ulid>
+public record UserSkill : Entity<Guid>
 {
-    public Ulid UserId { get; init; }
+    public Guid UserId { get; init; }
     public string Technology { get; init; } = string.Empty;
     public string? Topic { get; init; }
     public string Level { get; init; } = string.Empty;
@@ -262,13 +262,13 @@ public record UserSkill : Entity<Ulid>
     public JsonDocument Metadata { get; init; } = JsonDocument.Parse("{}");
 }
 
-public record Insight : Entity<Ulid>
+public record Insight : Entity<Guid>
 {
-    public Ulid UserId { get; init; }
+    public Guid UserId { get; init; }
     public string Type { get; init; } = string.Empty;
     public string Title { get; init; } = string.Empty;
     public string? Description { get; init; }
-    public Ulid[] RelatedNodeIds { get; init; } = [];
+    public Guid[] RelatedNodeIds { get; init; } = [];
     public int Priority { get; init; } = 5;
     public bool IsRead { get; init; } = false;
     public bool IsDismissed { get; init; } = false;
@@ -276,12 +276,12 @@ public record Insight : Entity<Ulid>
     public DateTimeOffset? ExpiresAt { get; init; }
 }
 
-public record AuditLog : Entity<Ulid>
+public record AuditLog : Entity<Guid>
 {
-    public Ulid? UserId { get; init; }
+    public Guid? UserId { get; init; }
     public string Action { get; init; } = string.Empty;
     public string? EntityType { get; init; }
-    public Ulid? EntityId { get; init; }
+    public Guid? EntityId { get; init; }
     public JsonDocument? OldValue { get; init; }
     public JsonDocument? NewValue { get; init; }
     public string? IpAddress { get; init; }
@@ -289,9 +289,9 @@ public record AuditLog : Entity<Ulid>
     public JsonDocument Metadata { get; init; } = JsonDocument.Parse("{}");
 }
 
-public record Notification : Entity<Ulid>
+public record Notification : Entity<Guid>
 {
-    public Ulid UserId { get; init; }
+    public Guid UserId { get; init; }
     public string Type { get; init; } = string.Empty;
     public string Title { get; init; } = string.Empty;
     public string? Message { get; init; }

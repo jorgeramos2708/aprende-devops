@@ -9,8 +9,9 @@ on:
 env:
   DOTNET_VERSION: '9.0.x'
   NODE_VERSION: '20.x'
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Registry propio (Zot) en edrs.xyz - DNS only, TLS via Caddy
+  REGISTRY: registry.edrs.xyz
+  IMAGE_PREFIX: aprende-devops
 
 jobs:
   # ----------------------------------------------------------
@@ -23,25 +24,25 @@ jobs:
         working-directory: ./src
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
           cache: true
-      
+
       - name: Restore dependencies
         run: dotnet restore DevOpsPlatform.sln
-      
+
       - name: Build
         run: dotnet build DevOpsPlatform.sln --no-restore --configuration Release
-      
+
       - name: Run unit tests
         run: dotnet test DevOpsPlatform.sln --no-build --configuration Release --collect:"XPlat Code Coverage" --results-directory ../test-results
-      
+
       - name: Publish API
         run: dotnet publish DevOpsPlatform.Api/DevOpsPlatform.Api.csproj --no-build --configuration Release --output ../artifacts/api
-      
+
       - name: Upload API artifact
         uses: actions/upload-artifact@v4
         with:
@@ -59,28 +60,28 @@ jobs:
         working-directory: ./web
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run lint
         run: npm run lint
-      
+
       - name: Run type check
         run: npm run typecheck
-      
+
       - name: Run unit tests
         run: npm run test -- --run
-      
+
       - name: Build
         run: npm run build
-      
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -89,125 +90,53 @@ jobs:
           retention-days: 1
 
   # ----------------------------------------------------------
-  # DOCKER: Build & Push Images
+  # DOCKER: Build & Push a Zot (registry.edrs.xyz)
   # ----------------------------------------------------------
   docker:
     needs: [backend, frontend]
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Download API artifact
         uses: actions/download-artifact@v4
         with:
           name: api
           path: artifacts/api
-      
+
       - name: Download Web artifact
         uses: actions/download-artifact@v4
         with:
           name: web-dist
           path: artifacts/web
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      - name: Log in to Container Registry
+
+      - name: Log in to Zot registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Extract metadata for API
-        id: meta-api
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api
-          tags: |
-            type=ref,event=branch
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-      
-      - name: Build and push API
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.api
-          push: true
-          tags: ${{ steps.meta-api.outputs.tags }}
-          labels: ${{ steps.meta-api.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
-      - name: Extract metadata for Web
-        id: meta-web
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/web
-          tags: |
-            type=ref,event=branch
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-      
-      - name: Build and push Web
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.web
-          push: true
-          tags: ${{ steps.meta-web.outputs.tags }}
-          labels: ${{ steps.meta-web.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          username: ${{ secrets.ZOT_CI_USER }}
+          password: ${{ secrets.ZOT_CI_PASSWORD }}
 
-      - name: Extract metadata for Workers
-        id: meta-workers
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/workers
-          tags: |
-            type=ref,event=branch
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Workers
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.workers
-          push: true
-          tags: ${{ steps.meta-workers.outputs.tags }}
-          labels: ${{ steps.meta-workers.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Extract metadata for TechWatcher
-        id: meta-watcher
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/techwatcher
-          tags: |
-            type=ref,event=branch
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push TechWatcher
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.techwatcher
-          push: true
-          tags: ${{ steps.meta-watcher.outputs.tags }}
-          labels: ${{ steps.meta-watcher.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Build and push images
+        run: |
+          set -e
+          for svc in api web workers techwatcher; do
+            docker build \
+              --file "Dockerfile.${svc}" \
+              --tag "${REGISTRY}/${IMAGE_PREFIX}/${svc}:sha-${GITHUB_SHA::7}" \
+              --tag "${REGISTRY}/${IMAGE_PREFIX}/${svc}:latest" \
+              --push .
+          done
 
   # ----------------------------------------------------------
-  # DEPLOY TO VM (on main branch)
+  # DEPLOY AL VPS (rama main)
+  # Requisito en el VPS: repo clonado en /opt/aprende-devops
+  # y archivo infra/docker-compose/.env rellenado (ver .env.example)
   # ----------------------------------------------------------
   deploy:
     needs: docker
@@ -216,29 +145,29 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install SSH key
         uses: shimataro/ssh-key-action@v2
         with:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
-      
+
       - name: Deploy via SSH
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
-            cd /opt/devops-platform
-
-            # Pull latest images
-            docker compose -f infra/docker-compose/docker-compose.prod.yml pull
-
-            # Restart services (el API crea el esquema con EnsureCreated al arrancar)
-            docker compose -f infra/docker-compose/docker-compose.prod.yml up -d --remove-orphans
-
-            # Clean up old images
+          # SSH del VPS en puerto 2222; KNOWN_HOSTS generar con: ssh-keyscan -p 2222 <ip>
+          # fetch+reset: deploy dir siempre limpio y auto-sanable (.env es ignorado por git)
+          ssh -p 2222 ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
+            set -e
+            cd /opt/aprende-devops
+            git fetch origin
+            git reset --hard origin/main
+            cd infra/docker-compose
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker image prune -f
           EOF
 
       - name: Health check
         run: |
           sleep 30
-          curl -f https://aprende-devops.edrs.xyz/health || exit 1
+          curl -fsS https://aprende-devops.edrs.xyz/health || exit 1

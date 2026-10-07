@@ -4,7 +4,6 @@ using DevOpsPlatform.Core.Entities;
 using DevOpsPlatform.Core.Interfaces;
 using DevOpsPlatform.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
@@ -84,7 +83,7 @@ public class TokenService : ITokenService
 
         _db.RefreshTokens.Add(new RefreshToken
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             UserId = user.Id,
             TokenHash = HashToken(refreshToken),
             ExpiresAt = expiresAt
@@ -120,7 +119,7 @@ public class TokenService : ITokenService
         var expiresAt = DateTimeOffset.UtcNow.Add(_refreshLifetime);
         _db.RefreshTokens.Add(new RefreshToken
         {
-            Id = Ulid.NewUlid(),
+            Id = Guid.CreateVersion7(),
             UserId = user.Id,
             TokenHash = HashToken(next),
             ExpiresAt = expiresAt
