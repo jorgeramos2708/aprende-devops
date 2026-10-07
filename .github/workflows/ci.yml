@@ -163,8 +163,8 @@ jobs:
             git fetch origin
             git reset --hard origin/main
             cd infra/docker-compose
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose --env-file /opt/aprende-devops/.env -f docker-compose.prod.yml pull
+            docker compose --env-file /opt/aprende-devops/.env -f docker-compose.prod.yml up -d --remove-orphans
             docker image prune -f
           EOF
 

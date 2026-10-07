@@ -36,4 +36,4 @@ Thumbs.db
 # Logs / backups
 *.log
 backups/
-data/
+/data/

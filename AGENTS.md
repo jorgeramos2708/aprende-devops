@@ -56,7 +56,8 @@ Si el equipo solo tiene runtime .NET 10+: `export DOTNET_ROLL_FORWARD=LatestMajo
 
 ## Secretos
 
-- App: `infra/docker-compose/.env` (plantilla `.env.example`).
+- App: `/opt/aprende-devops/.env` (raíz del repo; plantilla
+  `infra/docker-compose/.env.example`; el compose la recibe vía `--env-file`).
 - CI: secrets de GitHub listados en README. En código, jamás commitear valores.
 
 ## Roadmap de fases (contexto)

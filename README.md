@@ -44,8 +44,9 @@ La API aplica **migraciones EF Core al arrancar** y siembra contenido mínimo
 
 ## Despliegue (producción)
 
-1. VPS: clonar el repo en `/opt/aprende-devops` y crear
-   `infra/docker-compose/.env` a partir de `.env.example`.
+1. VPS: clonar el repo en `/opt/aprende-devops` y crear `/opt/aprende-devops/.env`
+   (raíz del repo; el compose lo toma vía `--env-file`) a partir de
+   `infra/docker-compose/.env.example`.
 2. Push a `main`: CI compila, prueba, construye imágenes, hace push a Zot y
    despliega por SSH (`docker compose pull && up -d`), con health check final.
 
