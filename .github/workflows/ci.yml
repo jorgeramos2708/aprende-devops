@@ -137,6 +137,16 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/techwatcher:sha-${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/techwatcher:latest
 
+      - name: Build and push backup
+        uses: docker/build-push-action@v6
+        with:
+          context: ./infra/backup
+          file: ./infra/backup/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/backup:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/backup:latest
+
   # ----------------------------------------------------------
   # DEPLOY AL VPS (rama main)
   # Requisito en el VPS: repo clonado en /opt/aprende-devops

@@ -184,8 +184,8 @@ services:
 
   # ---------------------------------------------------------- BACKUPS
   backup:
-    build:
-      context: ../../backup
+    # Imagen construida en CI (igual que el resto) -> /infra/backup/Dockerfile
+    image: registry.edrs.xyz/aprende-devops/backup:latest
     container_name: aprende-backup
     <<: *base-policy
     environment:
