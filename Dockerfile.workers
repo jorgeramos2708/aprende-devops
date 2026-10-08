@@ -11,6 +11,8 @@ WORKDIR /src/src/DevOpsPlatform.Workers
 RUN dotnet publish DevOpsPlatform.Workers.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+# root: los jobs tocan /var/run/docker.sock (limpieza y regresion de labs)
+USER root
 WORKDIR /app
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "DevOpsPlatform.Workers.dll"]

@@ -11,8 +11,10 @@ WORKDIR /src/src/DevOpsPlatform.Api
 RUN dotnet publish DevOpsPlatform.Api.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+# .NET 8+ las imagenes corren como no-root por defecto; necesitamos root para:
+# instalar curl (healthcheck) y hablar con /var/run/docker.sock (LabEngine)
+USER root
 WORKDIR /app
-# curl: necesario para el healthcheck de docker compose (/health)
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080
