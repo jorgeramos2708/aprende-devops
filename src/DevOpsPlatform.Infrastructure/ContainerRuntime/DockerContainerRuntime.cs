@@ -26,6 +26,9 @@ public class DockerContainerRuntime : IContainerRuntime
 
     public async Task<string> CreateContainerAsync(LabEnvironment lab, Guid attemptId, CancellationToken ct = default)
     {
+        // Pull si la imagen no esta en el host (Docker.DotNet no auto-descarga en create)
+        await EnsureImageAsync(lab.BaseImage, ct);
+
         var labels = new Dictionary<string, string>
         {
             ["lab.engine"] = "true",
@@ -226,6 +229,25 @@ public class DockerContainerRuntime : IContainerRuntime
             Labels = c.Labels != null ? new Dictionary<string, string>(c.Labels) : new(),
             CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(c.Created, DateTimeKind.Utc))
         }).ToList();
+    }
+
+    /// <summary>Descarga la imagen si no existe localmente (Zot propio primero).</summary>
+    private async Task EnsureImageAsync(string image, CancellationToken ct)
+    {
+        try
+        {
+            await _client.Images.InspectImageAsync(image, ct);
+            return; // ya esta en el host
+        }
+        catch { /* no existe localmente: descargar */ }
+
+        _logger.LogInformation("Descargando imagen de lab {Image}...", image);
+        await _client.Images.CreateImageAsync(
+            new ImagesCreateParameters { FromImage = image },
+            authConfig: null,
+            progress: new Progress<JSONMessage>(),
+            ct);
+        _logger.LogInformation("Imagen {Image} lista", image);
     }
 
     private static long ParseMemory(string memory)

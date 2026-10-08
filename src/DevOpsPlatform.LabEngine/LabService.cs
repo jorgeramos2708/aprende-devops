@@ -184,5 +184,6 @@ public record LabResourceLimits
     public string Memory { get; init; } = "512m";
     public int Pids { get; init; } = 100;
     public int TimeoutSeconds { get; init; } = 1800;
-    public bool UseGVisor { get; init; } = true;
+    public string? Runtime { get; init; }      // "sysbox-runc" | "runsc" (opcional)
+    public string Network { get; init; } = "bridge";
 }

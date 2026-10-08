@@ -36,11 +36,12 @@ export function Terminal({ attemptId, onConnect, onDisconnect, onError }: Termin
     try {
       // Get terminal token from API (axios inyecta el JWT; fetch nativo lo omitia -> 401)
       const { data: tokenData } = await api.get(`/labs/${attemptId}/terminal/token`)
-      const { sessionToken, webSocketUrl } = tokenData
+      const { webSocketUrl } = tokenData
 
-      // Determine WebSocket URL
+      // webSocketUrl ya incluye el token (/api/labs/ws?token=...): usar tal cual
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsUrl = `${wsProtocol}//${window.location.host}${webSocketUrl}?token=${sessionToken}`
+      const sep = webSocketUrl.includes('?') ? '&' : '?'
+      const wsUrl = `${wsProtocol}//${window.location.host}${webSocketUrl}${sep}client=xterm`
 
       websocketRef.current = new WebSocket(wsUrl)
       const ws = websocketRef.current
