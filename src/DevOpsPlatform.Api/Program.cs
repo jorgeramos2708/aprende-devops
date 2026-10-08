@@ -488,6 +488,10 @@ labs.MapPost("/start", async Task<IResult> (LabStartRequest req, HttpContext ctx
     {
         return Results.BadRequest(new { error = ex.Message });
     }
+    catch (Exception ex)
+    {
+        return Results.Problem($"No se pudo iniciar el laboratorio: {ex.Message}", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
 });
 
 labs.MapPost("/{attemptId}/stop", async (Guid attemptId, ILabOrchestrator orchestrator, CancellationToken ct) =>
