@@ -97,16 +97,45 @@ jobs:
           username: ${{ secrets.ZOT_CI_USER }}
           password: ${{ secrets.ZOT_CI_PASSWORD }}
 
-      - name: Build and push images
-        run: |
-          set -e
-          for svc in api web workers techwatcher; do
-            docker build \
-              --file "Dockerfile.${svc}" \
-              --tag "${REGISTRY}/${IMAGE_PREFIX}/${svc}:sha-${GITHUB_SHA::7}" \
-              --tag "${REGISTRY}/${IMAGE_PREFIX}/${svc}:latest" \
-              --push .
-          done
+      - name: Build and push api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.api
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/api:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/api:latest
+
+      - name: Build and push web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.web
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/web:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/web:latest
+
+      - name: Build and push workers
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.workers
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/workers:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/workers:latest
+
+      - name: Build and push techwatcher
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.techwatcher
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/techwatcher:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/techwatcher:latest
 
   # ----------------------------------------------------------
   # DEPLOY AL VPS (rama main)
