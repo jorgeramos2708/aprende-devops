@@ -71,6 +71,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
+      minio:    { condition: service_started }
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
       interval: 30s
@@ -164,21 +165,18 @@ services:
         limits: { cpus: "0.25", memory: "128M" }
 
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    # RustFS: reemplazo OSS S3-compatible (MinIO retiro sus imagenes publicas en 2025).
+    # El nombre del servicio se conserva: la API lo contacta en minio:9000.
+    image: rustfs/rustfs:latest
     container_name: aprende-minio
     <<: *base-policy
-    command: ["server", "/data"]
+    command: ["/data"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      RUSTFS_ACCESS_KEY: ${MINIO_ROOT_USER}
+      RUSTFS_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio-data:/data
     networks: [internal]            # consola solo por tunel SSH si se necesita
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     logging: *default-logging
     deploy:
       resources:

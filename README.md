@@ -17,7 +17,7 @@ nuevas versiones de cada tecnología (TechWatcher).
 |---|---|
 | Frontend | React 18 + Vite + Tailwind (`web/`) |
 | Backend | .NET 9 minimal APIs (`src/`) — Api, Core, Infrastructure, LabEngine, Workers (Hangfire), TechWatcher |
-| Datos | PostgreSQL 16, Redis 7, MinIO |
+| Datos | PostgreSQL 16, Redis 7, RustFS (S3-compatible; sustituto de MinIO) |
 | Labs | Contenedores efímeros por usuario vía Docker API + terminal xterm.js ↔ SignalR |
 | Infra | Docker Compose en VPS Contabo; Caddy (externo, red `caddy_net`) como edge; Cloudflare DNS/proxy |
 | CI/CD | GitHub Actions → build/push a Zot → deploy por SSH |
