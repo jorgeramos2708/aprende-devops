@@ -200,6 +200,32 @@ static string Meta(KnowledgeNode node, string key)
     catch { return ""; }
 }
 
+static int MetaInt(KnowledgeNode node, string key)
+{
+    try
+    {
+        return node.Metadata.RootElement.ValueKind == JsonValueKind.Object
+            && node.Metadata.RootElement.TryGetProperty(key, out var v)
+            && v.ValueKind == JsonValueKind.Number
+            ? v.GetInt32()
+            : 0;
+    }
+    catch { return 0; }
+}
+
+// La descripcion de una tecnologia vive en Content (no en Metadata)
+static string ContentDesc(KnowledgeNode node)
+{
+    try
+    {
+        return node.Content?.RootElement.ValueKind == JsonValueKind.Object
+            && node.Content.RootElement.TryGetProperty("description", out var d)
+            ? d.GetString() ?? ""
+            : "";
+    }
+    catch { return ""; }
+}
+
 // API Routes
 var api = app.MapGroup("/api").RequireAuthorization();
 
@@ -294,18 +320,29 @@ learning.MapGet("/technologies/{slug}", async (string slug, IKnowledgeGraphRepos
     var tech = await repo.GetBySlugAsync("Technology", slug, null, ct);
     if (tech == null) return Results.NotFound();
     var children = await repo.GetChildrenAsync(tech.Id, ct);
-    return Results.Ok(new
-    {
-        name = tech.Title,
-        description = Meta(tech, "description"),
-        levels = new[] { "basic", "intermediate", "advanced" },
-        nodes = children.Select(n => new
+
+    var levelOrder = new Dictionary<string, int> { ["basic"] = 0, ["intermediate"] = 1, ["advanced"] = 2, ["expert"] = 3 };
+    var nodes = children
+        .Select(n => new
         {
             id = n.Id,
             title = n.Title,
             level = Meta(n, "level"),
-            type = n.Type.ToString()
+            type = n.Type.ToString(),
+            module = Meta(n, "module"),
+            order = MetaInt(n, "order"),
+            minutes = MetaInt(n, "estimated_minutes")
         })
+        .OrderBy(n => levelOrder.TryGetValue(n.level ?? "", out var o) ? o : 9)
+        .ThenBy(n => n.order)
+        .ToList();
+
+    return Results.Ok(new
+    {
+        name = tech.Title,
+        description = ContentDesc(tech),
+        levels = new[] { "basic", "intermediate", "advanced" },
+        nodes
     });
 });
 
@@ -324,6 +361,9 @@ learning.MapGet("/nodes/{id}", async (Guid id, IKnowledgeGraphRepository repo, P
     catch { markdown = null; }
 
     var tech = Meta(node, "technology");
+    var level = Meta(node, "level");
+    var order = MetaInt(node, "order");
+
     Guid? labId = null;
     if (!string.IsNullOrEmpty(tech))
     {
@@ -331,12 +371,34 @@ learning.MapGet("/nodes/{id}", async (Guid id, IKnowledgeGraphRepository repo, P
         labId = labs.FirstOrDefault(l => LabMetaEquals(l.Metadata, tech))?.Id;
     }
 
+    // Navegacion prev/sig dentro del mismo nivel de la misma tecnologia
+    Guid? prevId = null, nextId = null;
+    if (!string.IsNullOrEmpty(tech) && !string.IsNullOrEmpty(level))
+    {
+        var techNode = await repo.GetBySlugAsync("Technology", tech, null, ct);
+        if (techNode != null)
+        {
+            var siblings = (await repo.GetChildrenAsync(techNode.Id, ct))
+                .Where(c => c.Type == NodeType.Lesson && Meta(c, "level") == level)
+                .OrderBy(c => MetaInt(c, "order"))
+                .ToList();
+            var idx = siblings.FindIndex(s => s.Id == id);
+            if (idx > 0) prevId = siblings[idx - 1].Id;
+            if (idx >= 0 && idx < siblings.Count - 1) nextId = siblings[idx + 1].Id;
+        }
+    }
+
     var children = await repo.GetChildrenAsync(node.Id, ct);
     return Results.Ok(new
     {
         title = node.Title,
         content = markdown ?? Meta(node, "description"),
+        technology = tech,
+        level,
+        order,
         labId,
+        prevId,
+        nextId,
         children = children.Select(c => new { id = c.Id, title = c.Title })
     });
 });
@@ -352,7 +414,7 @@ learning.MapGet("/roadmap", async (IKnowledgeGraphRepository repo, CancellationT
     var techs = await repo.GetByTypeAsync(NodeType.Technology, ct);
     return Results.Ok(new
     {
-        technologies = techs.Select(t => new { slug = t.Slug, name = t.Title, version = t.Version })
+        technologies = techs.Select(t => new { slug = t.Slug, name = t.Title, version = t.Version, description = ContentDesc(t) })
     });
 });
 
