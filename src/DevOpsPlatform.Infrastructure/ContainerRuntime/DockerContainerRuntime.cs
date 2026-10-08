@@ -13,12 +13,14 @@ using System.Text.Json;
 public class DockerContainerRuntime : IContainerRuntime
 {
     private readonly DockerClient _client;
+    private readonly DockerSocketExecClient _execClient;
     private readonly ILogger<DockerContainerRuntime> _logger;
 
     public DockerContainerRuntime(IConfiguration config, ILogger<DockerContainerRuntime> logger)
     {
         var dockerHost = config["Docker:Host"] ?? "unix:///var/run/docker.sock";
         _client = new DockerClientConfiguration(new Uri(dockerHost)).CreateClient();
+        _execClient = new DockerSocketExecClient(dockerHost, logger);
         _logger = logger;
     }
 
@@ -41,10 +43,12 @@ public class DockerContainerRuntime : IContainerRuntime
             Memory = ParseMemory(resourceLimits.Memory),
             PidsLimit = resourceLimits.Pids,
             AutoRemove = false,
-            NetworkMode = "none", // Isolated by default; can be overridden per lab
+            // "none" | "bridge" (default) | nombre de red docker. Egress por defecto (los labs de apt/redes lo necesitan)
+            NetworkMode = resourceLimits.Network,
             SecurityOpt = new List<string> { "no-new-privileges:true" },
             CapDrop = new List<string> { "ALL" },
-            CapAdd = new List<string> { "CAP_DAC_OVERRIDE" },
+            // CHOWN: los setup de los labs ajustan propiedad de archivos; DAC_OVERRIDE para /home/lab tmpfs
+            CapAdd = new List<string> { "CAP_CHOWN", "CAP_DAC_OVERRIDE" },
             Tmpfs = new Dictionary<string, string>
             {
                 ["/tmp"] = "size=100m,noexec,nosuid",
@@ -53,15 +57,17 @@ public class DockerContainerRuntime : IContainerRuntime
             ReadonlyRootfs = false
         };
 
-        // gVisor runtime for isolation
-        if (resourceLimits.UseGVisor)
+        // Runtime alterno: "sysbox-runc" (labs anidados docker/k8s) o "runsc" (gVisor), solo si el host los tiene
+        if (!string.IsNullOrWhiteSpace(resourceLimits.Runtime))
         {
-            hostConfig.Runtime = "runsc";
+            hostConfig.Runtime = resourceLimits.Runtime;
         }
 
         var createParams = new CreateContainerParameters
         {
             Image = lab.BaseImage,
+            // Proceso principal inerte: el usuario entra por exec con TTY (AttachExecShellAsync)
+            Cmd = new List<string> { "sleep", "infinity" },
             Labels = labels,
             HostConfig = hostConfig,
             Env = new List<string>
@@ -70,7 +76,7 @@ public class DockerContainerRuntime : IContainerRuntime
                 $"LAB_TYPE={lab.LabType}",
                 $"LAB_TIMEOUT={resourceLimits.TimeoutSeconds}"
             },
-            WorkingDir = "/workspace",
+            WorkingDir = "/home/lab",
             AttachStdin = true,
             AttachStdout = true,
             AttachStderr = true,
@@ -119,35 +125,13 @@ public class DockerContainerRuntime : IContainerRuntime
 
     public async Task<ContainerExecResult> ExecAsync(string containerId, string[] command, CancellationToken ct = default)
     {
-        var execCreate = await _client.Exec.ExecCreateContainerAsync(containerId, new ContainerExecCreateParameters
-        {
-            AttachStdout = true,
-            AttachStderr = true,
-            AttachStdin = false,
-            Cmd = command,
-            Tty = false
-        }, ct);
-
-        using var execStream = await _client.Exec.StartWithConfigContainerExecAsync(execCreate.ID, new ContainerExecStartParameters
-        {
-            AttachStdout = true,
-            AttachStderr = true,
-            Tty = false,
-            Detach = false
-        }, ct);
-
-        // Read output
-        using var stdout = new MemoryStream();
-        using var stderr = new MemoryStream();
-        await execStream.CopyOutputToAsync(Stream.Null, stdout, stderr, ct);
-
-        var inspect = await _client.Exec.InspectContainerExecAsync(execCreate.ID, ct);
-
+        // Via socket crudo (Docker.DotNet no puede hackear respuestas chunked de Engine 25+)
+        var result = await _execClient.RunToCompletionAsync(containerId, command, ct);
         return new ContainerExecResult
         {
-            ExitCode = (int)inspect.ExitCode,
-            Stdout = System.Text.Encoding.UTF8.GetString(stdout.ToArray()),
-            Stderr = System.Text.Encoding.UTF8.GetString(stderr.ToArray())
+            ExitCode = result.ExitCode,
+            Stdout = result.Stdout,
+            Stderr = result.Stderr
         };
     }
 
@@ -167,6 +151,31 @@ public class DockerContainerRuntime : IContainerRuntime
         await _client.Containers.ResizeContainerTtyAsync(containerId, new ContainerResizeParameters { Height = rows, Width = cols }, ct);
 
         return new MultiplexedStreamAdapter(stream);
+    }
+
+    public async Task<TerminalExecSession> AttachExecShellAsync(string containerId, int cols, int rows, CancellationToken ct = default)
+    {
+        // PTY real via socket crudo: funciona igual en Linux y Docker Desktop/Engine 29
+        var exec = await _execClient.StartInteractiveAsync(containerId, cols, rows, ct);
+        return new TerminalExecSession { ExecId = exec.ExecId, Stream = exec.Raw };
+    }
+
+    public async Task<bool> ResizeExecAsync(string execId, int cols, int rows, CancellationToken ct = default)
+    {
+        try
+        {
+            await _client.Exec.ResizeContainerExecTtyAsync(execId, new ContainerResizeParameters
+            {
+                Height = rows,
+                Width = cols
+            }, ct);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "No se pudo redimensionar exec {ExecId}", execId);
+            return false;
+        }
     }
 
     public async Task<ContainerInfo?> GetContainerInfoAsync(string containerId, CancellationToken ct = default)
@@ -234,7 +243,8 @@ public class DockerContainerRuntime : IContainerRuntime
         public string Memory { get; init; } = "512m";
         public int Pids { get; init; } = 100;
         public int TimeoutSeconds { get; init; } = 1800;
-        public bool UseGVisor { get; init; } = true;
+        public string? Runtime { get; init; }      // "sysbox-runc" | "runsc" (opcional)
+        public string Network { get; init; } = "bridge";
     }
 
     /// <summary>

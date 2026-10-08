@@ -1,0 +1,33 @@
+slug: linux-permisos
+name: "Linux: permisos y propiedad"
+description: "Ajusta permisos y propietarios hasta cumplir una politica de seguridad realista. Valida con el boton Validar."
+type: practice
+image: registry.edrs.xyz/labs/linux-basic:latest
+timeout_seconds: 3600
+level: basic
+module: seguridad-basica
+lesson: linux-basic-04-permisos
+estimated_minutes: 25
+resources:
+  cpus: "0.5"
+  memory: "512m"
+  pids: 100
+  network: bridge
+setup_script: |
+  set -e
+  mkdir -p /home/lab/taller
+  printf '#!/bin/bash\necho desplegando\n' > /home/lab/taller/deploy.sh
+  echo "TOP-SECRET" > /home/lab/taller/secreto.txt
+  echo "contenido publico" > /home/lab/taller/publico.txt
+  chmod 777 /home/lab/taller/secreto.txt
+  chmod 644 /home/lab/taller/deploy.sh
+  chown -R lab:lab /home/lab
+validation_script: |
+  ok=1
+  [ "$(stat -c %a /home/lab/taller/deploy.sh)" = "755" ] || { echo "FALTA: deploy.sh debe ser ejecutable por todos -> 755 (chmod)"; ok=0; }
+  [ "$(stat -c %a /home/lab/taller/secreto.txt)" = "600" ] || { echo "FALTA: secreto.txt solo para su duenio -> 600"; ok=0; }
+  [ "$(stat -c %U /home/lab/taller/publico.txt)" = "lab" ] || { echo "FALTA: publico.txt debe pertenecer al usuario lab (chown)"; ok=0; }
+  /home/lab/taller/deploy.sh >/dev/null 2>&1 || { echo "FALTA: deploy.sh no ejecuta (permiso x o contenido)"; ok=0; }
+  [ $ok -eq 1 ] && echo '{"result":"PASS","message":"Politica de permisos correcta"}' && exit 0
+  echo '{"result":"FAIL","message":"Revisa las pistas marcadas"}'
+  exit 1

@@ -69,8 +69,17 @@ public interface IContainerRuntime
     Task<bool> RemoveContainerAsync(string containerId, CancellationToken ct = default);
     Task<ContainerExecResult> ExecAsync(string containerId, string[] command, CancellationToken ct = default);
     Task<Stream> AttachTerminalAsync(string containerId, int cols, int rows, CancellationToken ct = default);
+    /// <summary>Sesion de shell interactiva persistente (exec con TTY). Devuelve stream + execId para resize.</summary>
+    Task<TerminalExecSession> AttachExecShellAsync(string containerId, int cols, int rows, CancellationToken ct = default);
+    Task<bool> ResizeExecAsync(string execId, int cols, int rows, CancellationToken ct = default);
     Task<ContainerInfo?> GetContainerInfoAsync(string containerId, CancellationToken ct = default);
     Task<IReadOnlyList<ContainerInfo>> ListContainersAsync(string? labelFilter = null, CancellationToken ct = default);
+}
+
+public record TerminalExecSession
+{
+    public string ExecId { get; init; } = string.Empty;
+    public Stream Stream { get; init; } = Stream.Null;
 }
 
 public record ContainerExecResult

@@ -1,0 +1,37 @@
+name: Lab images
+
+on:
+  push:
+    branches: [main]
+    paths: ['labs/**']
+  workflow_dispatch:
+
+env:
+  REGISTRY: registry.edrs.xyz
+
+jobs:
+  build-labs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Zot registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ZOT_CI_USER }}
+          password: ${{ secrets.ZOT_CI_PASSWORD }}
+
+      - name: Build and push linux-basic
+        uses: docker/build-push-action@v6
+        with:
+          context: ./labs/linux-basic
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/labs/linux-basic:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/labs/linux-basic:latest

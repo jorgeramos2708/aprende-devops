@@ -1,165 +1,161 @@
 namespace DevOpsPlatform.LabEngine;
 
 using DevOpsPlatform.Core.Interfaces;
-using DevOpsPlatform.Core.Models;
-using System.Linq;
-using Docker.DotNet;
-using Docker.DotNet.Models;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Threading.Channels;
 
-public class TerminalStreamManager : BackgroundService
+/// <summary>
+/// Administra sesiones de terminal persistentes (docker exec con TTY) por intento de lab.
+/// Singleton: una sesion por intento; N suscriptores (pestanas del navegador) por intento
+/// reciben la misma salida via canales de difusion.
+/// </summary>
+public class TerminalStreamManager : IAsyncDisposable
 {
-    private readonly IContainerRuntime _containerRuntime;
+    private readonly IContainerRuntime _runtime;
     private readonly ILogger<TerminalStreamManager> _logger;
     private readonly ConcurrentDictionary<Guid, TerminalSession> _sessions = new();
 
-    public TerminalStreamManager(IContainerRuntime containerRuntime, ILogger<TerminalStreamManager> logger)
+    public TerminalStreamManager(IContainerRuntime runtime, ILogger<TerminalStreamManager> logger)
     {
-        _containerRuntime = containerRuntime;
+        _runtime = runtime;
         _logger = logger;
     }
 
-    public async Task<TerminalSession> StartSessionAsync(Guid attemptId, string containerId, int cols, int rows, CancellationToken ct = default)
+    public bool IsActive(Guid attemptId) => _sessions.ContainsKey(attemptId);
+
+    public async Task EnsureSessionAsync(Guid attemptId, string containerId, int cols, int rows, CancellationToken ct = default)
     {
+        if (_sessions.ContainsKey(attemptId)) return;
+
+        var exec = await _runtime.AttachExecShellAsync(containerId, cols, rows, ct);
         var session = new TerminalSession
         {
             AttemptId = attemptId,
             ContainerId = containerId,
+            ExecId = exec.ExecId,
+            Stream = exec.Stream,
             Cols = cols,
             Rows = rows,
-            InputChannel = System.Threading.Channels.Channel.CreateUnbounded<string>(),
-            OutputChannel = System.Threading.Channels.Channel.CreateUnbounded<TerminalOutput>(),
-            CancellationTokenSource = new CancellationTokenSource()
+            Cancel = new CancellationTokenSource()
         };
 
-        _sessions[attemptId] = session;
-
-        // Start the Docker attach loop
-        session.AttachTask = Task.Run(() => RunAttachLoopAsync(session, ct), ct);
-
-        return session;
-    }
-
-    public async Task StopSessionAsync(Guid attemptId)
-    {
-        if (_sessions.TryRemove(attemptId, out var session))
+        if (!_sessions.TryAdd(attemptId, session))
         {
-            session.CancellationTokenSource.Cancel();
-            session.InputChannel.Writer.Complete();
-            await session.AttachTask;
+            // Carrera: otra pestaña la creo primero
+            await exec.Stream.DisposeAsync();
+            return;
         }
+
+        session.PumpTask = Task.Run(() => PumpOutputAsync(session));
+        _logger.LogInformation("Sesion de terminal iniciada para intento {AttemptId} (contenedor {ContainerId})", attemptId, containerId);
     }
 
-    public async Task SendInputAsync(Guid attemptId, string input)
+    public ChannelReader<string> Subscribe(Guid attemptId)
+    {
+        var channel = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
+        if (_sessions.TryGetValue(attemptId, out var session))
+        {
+            lock (session.Subscribers) { session.Subscribers.Add(channel); }
+        }
+        return channel.Reader;
+    }
+
+    public void Unsubscribe(Guid attemptId, ChannelReader<string> reader)
     {
         if (_sessions.TryGetValue(attemptId, out var session))
         {
-            await session.InputChannel.Writer.WriteAsync(input);
+            lock (session.Subscribers)
+            {
+                session.Subscribers.RemoveAll(c => c.Reader == reader);
+            }
         }
+    }
+
+    public async Task WriteAsync(Guid attemptId, string data)
+    {
+        if (!_sessions.TryGetValue(attemptId, out var session)) return;
+        var bytes = System.Text.Encoding.UTF8.GetBytes(data);
+        await session.WriteLock.WaitAsync();
+        try
+        {
+            await session.Stream.WriteAsync(bytes, 0, bytes.Length);
+            await session.Stream.FlushAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "No se pudo escribir en la terminal de {AttemptId}", attemptId);
+        }
+        finally { session.WriteLock.Release(); }
     }
 
     public async Task ResizeAsync(Guid attemptId, int cols, int rows)
     {
-        if (_sessions.TryGetValue(attemptId, out var session))
+        if (!_sessions.TryGetValue(attemptId, out var session)) return;
+        session.Cols = cols;
+        session.Rows = rows;
+        await _runtime.ResizeExecAsync(session.ExecId, cols, rows);
+    }
+
+    public async Task StopAsync(Guid attemptId)
+    {
+        if (!_sessions.Remove(attemptId, out var session)) return;
+        session.Cancel.Cancel();
+        lock (session.Subscribers)
         {
-            session.Cols = cols;
-            session.Rows = rows;
-            // Send resize escape sequence
-            await session.InputChannel.Writer.WriteAsync($"[8;{rows};{cols}t");
+            foreach (var ch in session.Subscribers) ch.Writer.TryComplete();
+            session.Subscribers.Clear();
         }
+        try { await session.PumpTask.WaitAsync(TimeSpan.FromSeconds(2)); } catch { /* timeout ok */ }
+        try { await session.Stream.DisposeAsync(); } catch { }
     }
 
-    public IAsyncEnumerable<TerminalOutput> GetOutputAsync(Guid attemptId, CancellationToken ct = default)
+    private async Task PumpOutputAsync(TerminalSession session)
     {
-        if (_sessions.TryGetValue(attemptId, out var session))
-        {
-            return session.OutputChannel.Reader.ReadAllAsync(ct);
-        }
-        return EmptyOutput();
-    }
-
-    private static async IAsyncEnumerable<TerminalOutput> EmptyOutput()
-    {
-        await Task.CompletedTask.ConfigureAwait(false);
-        yield break;
-    }
-
-    private async Task RunAttachLoopAsync(TerminalSession session, CancellationToken ct)
-    {
+        var buffer = new byte[8192];
         try
         {
-            var stream = await _containerRuntime.AttachTerminalAsync(
-                session.ContainerId, session.Cols, session.Rows, ct);
-
-            var buffer = new byte[4096];
-            var token = session.CancellationTokenSource.Token;
-            var readTask = stream.ReadAsync(buffer, 0, buffer.Length, token);
-            var inputTask = session.InputChannel.Reader.ReadAsync(token).AsTask();
-
-            while (!token.IsCancellationRequested)
+            while (!session.Cancel.IsCancellationRequested)
             {
-                var completedTask = await Task.WhenAny(readTask, inputTask);
+                var read = await session.Stream.ReadAsync(buffer.AsMemory(0, buffer.Length), session.Cancel.Token);
+                if (read <= 0) break; // EOF: shell finalizo
 
-                if (completedTask == readTask)
+                var text = System.Text.Encoding.UTF8.GetString(buffer, 0, read);
+                lock (session.Subscribers)
                 {
-                    var bytesRead = await readTask;
-                    if (bytesRead == 0) break; // EOF
-
-                    var output = System.Text.Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    await session.OutputChannel.Writer.WriteAsync(new TerminalOutput { Data = output }, token);
-                    if (token.IsCancellationRequested) break;
-                    readTask = stream.ReadAsync(buffer, 0, buffer.Length, token);
-                }
-                else
-                {
-                    var input = await inputTask;
-                    if (token.IsCancellationRequested) break;
-
-                    // Write input to container stdin
-                    var inputBytes = System.Text.Encoding.UTF8.GetBytes(input);
-                    await stream.WriteAsync(inputBytes, 0, inputBytes.Length, token);
-                    await stream.FlushAsync(token);
-
-                    inputTask = session.InputChannel.Reader.ReadAsync(token).AsTask();
+                    foreach (var ch in session.Subscribers) ch.Writer.TryWrite(text);
                 }
             }
         }
-        catch (OperationCanceledException)
-        {
-            // Expected
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Terminal attach loop failed for attempt {AttemptId}", session.AttemptId);
-            await session.OutputChannel.Writer.WriteAsync(new TerminalOutput
+            _logger.LogWarning(ex, "Pump de terminal fallo para {AttemptId}", session.AttemptId);
+            lock (session.Subscribers)
             {
-                Data = $"[Connection lost: {ex.Message}]",
-                IsError = true
-            });
-        }
-        finally
-        {
-            session.OutputChannel.Writer.Complete();
+                foreach (var ch in session.Subscribers)
+                    ch.Writer.TryWrite("\r\n\x1b[31m[Error de conexion con el contenedor]\x1b[0m\r\n");
+            }
         }
     }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    public async ValueTask DisposeAsync()
     {
-        // Periodic cleanup of dead sessions
-        return Task.CompletedTask;
+        foreach (var id in _sessions.Keys.ToArray())
+            await StopAsync(id);
     }
 
-    public class TerminalSession
+    private sealed class TerminalSession
     {
-        public Guid AttemptId { get; set; }
-        public string ContainerId { get; set; } = string.Empty;
+        public required Guid AttemptId { get; init; }
+        public required string ContainerId { get; init; }
+        public required string ExecId { get; init; }
+        public required Stream Stream { get; init; }
+        public required CancellationTokenSource Cancel { get; init; }
         public int Cols { get; set; }
         public int Rows { get; set; }
-        public System.Threading.Channels.Channel<string> InputChannel { get; set; } = null!;
-        public System.Threading.Channels.Channel<TerminalOutput> OutputChannel { get; set; } = null!;
-        public CancellationTokenSource CancellationTokenSource { get; set; } = null!;
-        public Task AttachTask { get; set; } = Task.CompletedTask;
+        public List<Channel<string>> Subscribers { get; } = new();
+        public SemaphoreSlim WriteLock { get; } = new(1, 1);
+        public Task PumpTask { get; set; } = Task.CompletedTask;
     }
 }

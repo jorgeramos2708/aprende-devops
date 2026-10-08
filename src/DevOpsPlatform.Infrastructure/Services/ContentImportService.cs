@@ -73,6 +73,23 @@ public static class ContentImportService
                 db.KnowledgeNodes.RemoveRange(demos);
                 logger.LogInformation("Retiradas {Count} lecciones demo de {Tech}", demos.Count, techSlug);
             }
+
+            // Labs del roadmap: content/<tech>/labs/*.yml
+            var labsDir = Path.Combine(techDir, "labs");
+            if (Directory.Exists(labsDir))
+            {
+                foreach (var labFile in Directory.GetFiles(labsDir, "*.yml").OrderBy(f => f))
+                    await ImportLabAsync(db, techSlug, labFile, logger, ct);
+
+                // Desactivar el lab demo heredado del seeder cuando ya hay labs reales
+                var demo = await db.LabEnvironments
+                    .FirstOrDefaultAsync(l => l.Slug == $"{techSlug}-terminal-basica" && l.IsActive, ct);
+                if (demo != null)
+                {
+                    demo.IsActive = false;
+                    logger.LogInformation("Lab demo desactivado: {Slug}", demo.Slug);
+                }
+            }
         }
 
         await db.SaveChangesAsync(ct);
@@ -314,6 +331,109 @@ public static class ContentImportService
             };
             db.Entry(existing).CurrentValues.SetValues(updated);
         }
+    }
+
+    // ---------------------------------------------------------------- labs
+    private static async Task ImportLabAsync(PlatformDbContext db, string techSlug, string file, ILogger logger, CancellationToken ct)
+    {
+        LabYaml? def;
+        try { def = Yaml().Deserialize<LabYaml>(await File.ReadAllTextAsync(file, ct)); }
+        catch (Exception ex) { logger.LogError(ex, "Lab invalido en {File}", file); return; }
+        if (def == null || string.IsNullOrWhiteSpace(def.Slug) || string.IsNullOrWhiteSpace(def.Name)
+            || string.IsNullOrWhiteSpace(def.Image))
+        {
+            logger.LogWarning("Lab sin slug/name/image: {File}", file);
+            return;
+        }
+
+        // OJO: nombres exactos que DockerContainerRuntime.LabResourceLimits espera (case-sensitive)
+        var limits = JsonDocument.Parse(JsonSerializer.Serialize(new
+        {
+            Cpus = def.Resources?.Cpus ?? "0.5",
+            Memory = def.Resources?.Memory ?? "512m",
+            Pids = def.Resources?.Pids ?? 100,
+            TimeoutSeconds = def.TimeoutSeconds,
+            Network = def.Resources?.Network ?? "bridge",
+            Runtime = def.Resources?.Runtime
+        }));
+
+        var metadata = JsonDocument.Parse(JsonSerializer.Serialize(new
+        {
+            technology = techSlug,
+            level = def.Level ?? "basic",
+            module = def.Module ?? "",
+            lesson = def.Lesson ?? "",
+            estimatedTimeMinutes = def.EstimatedMinutes
+        }));
+
+        var existing = await db.LabEnvironments.FirstOrDefaultAsync(l => l.Slug == def.Slug, ct);
+        if (existing == null)
+        {
+            db.LabEnvironments.Add(new LabEnvironment
+            {
+                Id = Guid.CreateVersion7(),
+                Name = def.Name,
+                Slug = def.Slug,
+                Description = def.Description,
+                LabType = ParseLabType(def.Type),
+                BaseImage = def.Image,
+                ResourceLimits = limits,
+                ValidationScript = def.ValidationScript,
+                SetupScript = def.SetupScript,
+                Metadata = metadata,
+                IsActive = true
+            });
+            logger.LogInformation("Lab registrado: {Slug}", def.Slug);
+        }
+        else
+        {
+            existing.Name = def.Name;
+            existing.Description = def.Description;
+            existing.LabType = ParseLabType(def.Type);
+            existing.BaseImage = def.Image;
+            existing.ResourceLimits = limits;
+            existing.ValidationScript = def.ValidationScript;
+            existing.SetupScript = def.SetupScript;
+            existing.Metadata = metadata;
+            existing.IsActive = true;
+            logger.LogDebug("Lab actualizado: {Slug}", def.Slug);
+        }
+    }
+
+    private static LabType ParseLabType(string? t) => (t ?? "").Trim().ToLowerInvariant() switch
+    {
+        "practice" => LabType.Practice,
+        "troubleshooting" => LabType.Troubleshooting,
+        "challenge" => LabType.Challenge,
+        "project" => LabType.Project,
+        "certification" => LabType.Certification,
+        _ => LabType.Guided
+    };
+
+    private sealed class LabYaml
+    {
+        public string Slug { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? Description { get; set; }
+        public string? Type { get; set; }
+        public string Image { get; set; } = "";
+        public int TimeoutSeconds { get; set; } = 3600;
+        public string? Level { get; set; }
+        public string? Module { get; set; }
+        public string? Lesson { get; set; }
+        public int EstimatedMinutes { get; set; } = 30;
+        public string? SetupScript { get; set; }
+        public string? ValidationScript { get; set; }
+        public LabResourcesYaml? Resources { get; set; }
+    }
+
+    private sealed class LabResourcesYaml
+    {
+        public string? Cpus { get; set; }
+        public string? Memory { get; set; }
+        public int? Pids { get; set; }
+        public string? Network { get; set; }
+        public string? Runtime { get; set; }
     }
 
     // ---------------------------------------------------------------- utilidades

@@ -8,30 +8,41 @@ using DevOpsPlatform.Infrastructure.Data;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using System.Text.Json;
+
+/// <summary>Lanzada cuando el VPS no tiene slots libres para un nuevo lab.</summary>
+public class LabCapacityException : Exception
+{
+    public LabCapacityException(int max)
+        : base($"Capacidad llena: {max} laboratorios activos. Espera unos minutos e intenta de nuevo.") { }
+}
 
 public class LabOrchestrator : ILabOrchestrator
 {
     private readonly PlatformDbContext _db;
     private readonly IContainerRuntime _containerRuntime;
     private readonly IConnectionMultiplexer _redis;
+    private readonly TerminalStreamManager _terminals;
     private readonly ILogger<LabOrchestrator> _logger;
-    private readonly IServiceProvider _services;
+    private readonly int _maxConcurrent;
 
     public LabOrchestrator(
         PlatformDbContext db,
         IContainerRuntime containerRuntime,
         IConnectionMultiplexer redis,
-        ILogger<LabOrchestrator> logger,
-        IServiceProvider services)
+        TerminalStreamManager terminals,
+        IConfiguration config,
+        ILogger<LabOrchestrator> logger)
     {
         _db = db;
         _containerRuntime = containerRuntime;
         _redis = redis;
+        _terminals = terminals;
         _logger = logger;
-        _services = services;
+        _maxConcurrent = config.GetValue("Labs:MaxConcurrent", 8);
     }
 
     public async Task<LabSession> StartLabAsync(Guid labEnvironmentId, Guid userId, CancellationToken ct = default)
@@ -42,11 +53,11 @@ public class LabOrchestrator : ILabOrchestrator
         if (lab == null)
             throw new InvalidOperationException("Lab environment not found or inactive");
 
-        // Check for existing running attempt
+        // 1 lab activo por usuario+lab (se retoma si sigue vivo)
         var existing = await _db.LabAttempts
-            .FirstOrDefaultAsync(a => a.UserId == userId && a.LabEnvironmentId == labEnvironmentId 
+            .FirstOrDefaultAsync(a => a.UserId == userId && a.LabEnvironmentId == labEnvironmentId
                 && (a.Status == LabStatus.Running || a.Status == LabStatus.Provisioning), ct);
-        
+
         if (existing != null)
         {
             // Resume existing session
@@ -56,6 +67,12 @@ public class LabOrchestrator : ILabOrchestrator
                 return await ResumeSessionAsync(existing, ct);
             }
         }
+
+        // Gate de capacidad global (slots del VPS; ver AGENTS/presupuesto de recursos)
+        var activeNow = await _db.LabAttempts.CountAsync(
+            a => a.Status == LabStatus.Running || a.Status == LabStatus.Provisioning, ct);
+        if (activeNow >= _maxConcurrent)
+            throw new LabCapacityException(_maxConcurrent);
 
         // Create new attempt
         var attempt = new LabAttempt
@@ -74,18 +91,20 @@ public class LabOrchestrator : ILabOrchestrator
 
         try
         {
-            // Run setup script if provided
-            if (!string.IsNullOrEmpty(lab.SetupScript))
-            {
-                await RunSetupScriptAsync(lab, attempt.Id, ct);
-            }
-
             // Create container
             var containerId = await _containerRuntime.CreateContainerAsync(lab, attempt.Id, ct);
             var started = await _containerRuntime.StartContainerAsync(containerId, ct);
 
             if (!started)
                 throw new InvalidOperationException("Failed to start container");
+
+            // Setup DESPUES del arranque (antes no se ejecutaba jamas dentro del contenedor)
+            if (!string.IsNullOrEmpty(lab.SetupScript))
+            {
+                var setup = await _containerRuntime.ExecAsync(containerId, ["sh", "-c", lab.SetupScript], ct);
+                if (setup.ExitCode != 0)
+                    _logger.LogWarning("Setup del lab {LabId} termino con codigo {Code}: {Err}", labEnvironmentId, setup.ExitCode, setup.Stderr);
+            }
 
             attempt.ContainerId = containerId;
             attempt.Status = LabStatus.Running;
@@ -172,12 +191,12 @@ public class LabOrchestrator : ILabOrchestrator
 
         var sessionToken = GenerateSessionToken(attemptId);
         await _redis.GetDatabase().StringSetAsync(
-            $"lab:terminal:{sessionToken}", 
-            attemptId.ToString(), 
+            $"lab:terminal:{sessionToken}",
+            attemptId.ToString(),
             TimeSpan.FromMinutes(30));
 
-        // Resize container terminal
-        await _containerRuntime.ExecAsync(attempt.ContainerId, new[] { "sh", "-c", $"resize -s {rows} {cols}" }, ct);
+        // Sesion persistente (docker exec bash): una por intento, compartida entre pestanias
+        await _terminals.EnsureSessionAsync(attemptId, attempt.ContainerId, cols, rows, ct);
 
         return new TerminalConnection
         {
@@ -188,30 +207,11 @@ public class LabOrchestrator : ILabOrchestrator
         };
     }
 
-    public async Task SendTerminalInputAsync(Guid attemptId, string input, CancellationToken ct = default)
-    {
-        var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
-        if (attempt?.ContainerId == null) return;
+    public Task SendTerminalInputAsync(Guid attemptId, string input, CancellationToken ct = default)
+        => _terminals.WriteAsync(attemptId, input);
 
-        // Write to container stdin via Docker attach
-        // This is a simplified version - in production you'd maintain a persistent attach stream
-        try
-        {
-            await _containerRuntime.ExecAsync(attempt.ContainerId, new[] { "sh", "-c", $"echo '{input.Replace("'", "'\''")}' > /dev/tty" }, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to send terminal input to {ContainerId}", attempt.ContainerId);
-        }
-    }
-
-    public async Task ResizeTerminalAsync(Guid attemptId, int cols, int rows, CancellationToken ct = default)
-    {
-        var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
-        if (attempt?.ContainerId == null) return;
-
-        await _containerRuntime.ExecAsync(attempt.ContainerId, new[] { "sh", "-c", $"resize -s {rows} {cols}" }, ct);
-    }
+    public Task ResizeTerminalAsync(Guid attemptId, int cols, int rows, CancellationToken ct = default)
+        => _terminals.ResizeAsync(attemptId, cols, rows);
 
     public async Task<LabValidationResult> ValidateLabAsync(Guid attemptId, CancellationToken ct = default)
     {
@@ -284,6 +284,7 @@ public class LabOrchestrator : ILabOrchestrator
 
     public async Task StopLabAsync(Guid attemptId, CancellationToken ct = default)
     {
+        await _terminals.StopAsync(attemptId);
         var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
         if (attempt == null) return;
 

@@ -5,6 +5,7 @@ import { WebLinksAddon } from 'xterm-addon-web-links'
 import { SearchAddon } from 'xterm-addon-search'
 import { Maximize2, Minimize2, Copy, AlertCircle, Loader2 } from 'lucide-react'
 import clsx from 'clsx'
+import { api } from '../lib/api'
 
 interface TerminalProps {
   attemptId: string
@@ -33,10 +34,9 @@ export function Terminal({ attemptId, onConnect, onDisconnect, onError }: Termin
     setError(null)
 
     try {
-      // Get terminal token from API
-      const tokenRes = await fetch(`/api/labs/${attemptId}/terminal/token`)
-      if (!tokenRes.ok) throw new Error('Failed to get terminal token')
-      const { sessionToken, webSocketUrl } = await tokenRes.json()
+      // Get terminal token from API (axios inyecta el JWT; fetch nativo lo omitia -> 401)
+      const { data: tokenData } = await api.get(`/labs/${attemptId}/terminal/token`)
+      const { sessionToken, webSocketUrl } = tokenData
 
       // Determine WebSocket URL
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'

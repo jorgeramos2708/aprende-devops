@@ -1,0 +1,32 @@
+slug: linux-cli-basico
+name: "Linux: navegación y archivos"
+description: "Practica navegar el filesystem, crear estructuras, copiar/mover y buscar. Las tareas se validan al pulsar Validar."
+type: guided
+image: registry.edrs.xyz/labs/linux-basic:latest
+timeout_seconds: 3600
+level: basic
+module: fundamentos
+lesson: linux-basic-01-shell-y-terminal
+estimated_minutes: 30
+resources:
+  cpus: "0.5"
+  memory: "512m"
+  pids: 100
+  network: bridge
+setup_script: |
+  set -e
+  mkdir -p /home/lab/practica/datos
+  cp /etc/os-release /home/lab/practica/sistema.txt
+  seq 1 50 > /home/lab/practica/datos/numeros.txt
+  echo "secreto: las respuestas son el camino" > /home/lab/practica/datos/pista.txt
+  chown -R lab:lab /home/lab
+validation_script: |
+  ok=1
+  test -d /home/lab/practica/proyectos || { echo "FALTA: crea el directorio practica/proyectos (mkdir -p)"; ok=0; }
+  test -f /home/lab/practica/proyectos/sistema.txt || { echo "FALTA: mueve o copia sistema.txt a proyectos/"; ok=0; }
+  test -f /home/lab/practica/datos/numeros-25.txt || { echo "FALTA: de numeros.txt quedate con las 25 primeras lineas en datos/numeros-25.txt (head)"; ok=0; }
+  grep -q '^total ' /home/lab/practica/recuento.txt 2>/dev/null || { echo "FALTA: guarda en practica/recuento.txt la salida de 'ls -l datos | tail -1'"; ok=0; }
+  grep -qi camino /home/lab/practica/descubrimiento.txt 2>/dev/null || { echo "FALTA: encuentra con grep el 'camino' dentro de datos/pista.txt y guarda la linea en practica/descubrimiento.txt"; ok=0; }
+  [ $ok -eq 1 ] && echo '{"result":"PASS","message":"Laboratorio completado"}' && exit 0
+  echo '{"result":"FAIL","message":"Revisa las pistas marcadas"}'
+  exit 1

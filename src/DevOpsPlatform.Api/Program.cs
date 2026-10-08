@@ -160,7 +160,7 @@ builder.Services.AddScoped<ISourceConnector, RssConnector>();
 builder.Services.AddScoped<ISourceConnector, HtmlConnector>();
 builder.Services.AddScoped<ISourceConnector, NpmConnector>();
 builder.Services.AddScoped<ISourceConnector, PyPIConnector>();
-builder.Services.AddHostedService<TerminalStreamManager>();
+builder.Services.AddSingleton<TerminalStreamManager>();
 builder.Services.AddSingleton<MarkdownRenderingService>();
 builder.Services.AddSingleton<MinioStorageService>();
 builder.Services.AddSingleton<YamlContentService>();
@@ -176,11 +176,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseSerilogRequestLogging();
+app.UseWebSockets();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHub<TerminalHub>("/api/labs/ws");
+// Terminal de labs: WebSocket crudo con token de un solo uso (Redis), no SignalR
+app.Map("/api/labs/ws", DevOpsPlatform.Api.Ws.TerminalSocketEndpoint.HandleAsync);
 app.MapHub<NotificationHub>("/api/notifications/hub");
 
 app.MapHealthChecks("/health");
@@ -371,11 +373,21 @@ learning.MapGet("/nodes/{id}", async (Guid id, IKnowledgeGraphRepository repo, P
     var level = Meta(node, "level");
     var order = MetaInt(node, "order");
 
+    // Laboratorio asociado: 1) slug exacto en metadata.lab, 2) primero de la tecnologia
     Guid? labId = null;
     if (!string.IsNullOrEmpty(tech))
     {
-        var labs = await db.LabEnvironments.Where(l => l.IsActive).ToListAsync(ct);
-        labId = labs.FirstOrDefault(l => LabMetaEquals(l.Metadata, tech))?.Id;
+        var labSlug = Meta(node, "lab");
+        if (!string.IsNullOrEmpty(labSlug))
+        {
+            labId = (await db.LabEnvironments
+                .FirstOrDefaultAsync(l => l.Slug == labSlug && l.IsActive, ct))?.Id;
+        }
+        if (labId == null)
+        {
+            var labs = await db.LabEnvironments.Where(l => l.IsActive).ToListAsync(ct);
+            labId = labs.FirstOrDefault(l => LabMetaEquals(l.Metadata, tech))?.Id;
+        }
     }
 
     // Navegacion prev/sig dentro del mismo nivel de la misma tecnologia
@@ -450,21 +462,32 @@ labs.MapGet("/{id}", async (Guid id, ILabService labService, CancellationToken c
     return lab == null ? Results.NotFound() : Results.Ok(lab);
 });
 
-labs.MapPost("/start", async (LabStartRequest req, HttpContext ctx, ILabOrchestrator orchestrator, CancellationToken ct) =>
+labs.MapPost("/start", async Task<IResult> (LabStartRequest req, HttpContext ctx, ILabOrchestrator orchestrator, CancellationToken ct) =>
 {
-    var userId = UserIdOf(ctx);
-    var session = await orchestrator.StartLabAsync(req.LabEnvironmentId, userId, ct);
-    var terminal = await orchestrator.ConnectTerminalAsync(session.AttemptId, 120, 30, ct);
-    return Results.Ok(new LabStartResponse
+    try
     {
-        AttemptId = session.AttemptId,
-        ContainerId = session.ContainerId,
-        WebSocketUrl = terminal.WebSocketUrl,
-        SessionToken = terminal.SessionToken,
-        ExpiresAt = session.ExpiresAt,
-        Cols = terminal.Cols,
-        Rows = terminal.Rows
-    });
+        var userId = UserIdOf(ctx);
+        var session = await orchestrator.StartLabAsync(req.LabEnvironmentId, userId, ct);
+        var terminal = await orchestrator.ConnectTerminalAsync(session.AttemptId, 120, 30, ct);
+        return Results.Ok(new LabStartResponse
+        {
+            AttemptId = session.AttemptId,
+            ContainerId = session.ContainerId,
+            WebSocketUrl = terminal.WebSocketUrl,
+            SessionToken = terminal.SessionToken,
+            ExpiresAt = session.ExpiresAt,
+            Cols = terminal.Cols,
+            Rows = terminal.Rows
+        });
+    }
+    catch (LabCapacityException ex)
+    {
+        return Results.Problem(ex.Message, statusCode: StatusCodes.Status429TooManyRequests);
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
 });
 
 labs.MapPost("/{attemptId}/stop", async (Guid attemptId, ILabOrchestrator orchestrator, CancellationToken ct) =>
