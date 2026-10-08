@@ -1,0 +1,10 @@
+title: Docker
+description: "Contenedores con Docker: ejecutar, construir imagenes, persistir datos y conectar servicios con redes."
+version: "1.0"
+icon: container
+color: "#2496ed"
+order: 3
+tech_version: "Docker Engine 27+"
+official_docs:
+  - https://docs.docker.com/
+  - https://docs.docker.com/get-started/

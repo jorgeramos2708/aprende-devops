@@ -25,7 +25,10 @@ public interface ILabOrchestrator
 {
     Task<LabSession> StartLabAsync(Guid labEnvironmentId, Guid userId, CancellationToken ct = default);
     Task<LabSession?> GetSessionAsync(Guid attemptId, CancellationToken ct = default);
-    Task<TerminalConnection> ConnectTerminalAsync(Guid attemptId, int cols, int rows, CancellationToken ct = default);
+    /// <summary>Token one-shot de terminal. Exige que el intento pertenezca al usuario.</summary>
+    Task<TerminalConnection> ConnectTerminalAsync(Guid attemptId, Guid userId, int cols, int rows, CancellationToken ct = default);
+    /// <summary>Solo uso interno (WS ya autenticado por token Redis): asegura sesion sin emitir token.</summary>
+    Task EnsureTerminalSessionAsync(Guid attemptId, int cols, int rows, CancellationToken ct = default);
     Task SendTerminalInputAsync(Guid attemptId, string input, CancellationToken ct = default);
     Task ResizeTerminalAsync(Guid attemptId, int cols, int rows, CancellationToken ct = default);
     Task<LabValidationResult> ValidateLabAsync(Guid attemptId, CancellationToken ct = default);

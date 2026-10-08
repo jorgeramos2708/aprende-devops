@@ -1,0 +1,111 @@
+# Examen de nivel: Docker Basico
+exam:
+  title: "Docker — Examen de nivel Basico"
+  description: "8 preguntas aleatorias del banco: contenedores, imagenes, volumenes y redes."
+  passing_score: 80
+  time_limit_minutes: 20
+  count: 8
+
+questions:
+  - topic: contenedores
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "¿Qué comando lanza un contenedor en segundo plano con nombre web?"
+    options: ["docker run --name web -d nginx", "docker start -d --name web nginx", "docker create -d web nginx", "docker exec -d web nginx"]
+    answer: "docker run --name web -d nginx"
+    explanation: "-d = detach. create solo lo crea; start arranca uno existente."
+    source: "https://docs.docker.com/reference/cli/docker/container/run/"
+
+  - topic: contenedores
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "Para entrar interactivamente a un contenedor vivo llamado web:"
+    options: ["docker attach web", "docker exec -it web sh", "docker run -it web sh", "docker enter web"]
+    answer: "docker exec -it web sh"
+    explanation: "exec crea un proceso adicional DENTRO del contenedor vivo (attach te pegaria al proceso principal)."
+    source: "https://docs.docker.com/reference/cli/docker/container/exec/"
+
+  - topic: imagenes
+    level: basic
+    difficulty: beginner
+    type: true_false
+    prompt: "Borrar un contenedor borra tambien su imagen."
+    answer: "false"
+    explanation: "La imagen es plantilla inmutable; borrar el contenedor solo elimina su capa escribible."
+    source: "https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-an-image/"
+
+  - topic: imagenes
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "En un Dockerfile, ¿cuál es la razón correcta de poner COPY de dependencias ANTES que COPY del código?"
+    options: [
+      "es solo estetica",
+      "los cambios de codigo invalidan menos cache y el re-build es rapido",
+      "Docker lo exige por sintaxis",
+      "asi las imagenes pesan menos"
+    ]
+    answer: "los cambios de codigo invalidan menos cache y el re-build es rapido"
+    explanation: "Cada instruccion es una capa cacheada; lo que menos cambia va primero."
+    source: "https://docs.docker.com/build/cache/"
+
+  - topic: volumenes
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "Para datos de base de datos en produccion, la opcion correcta es:"
+    options: ["dentro del contenedor", "bind mount a carpeta del host", "volumen nombrado", "tmpfs"]
+    answer: "volumen nombrado"
+    explanation: "Volumen gestionado por Docker: sobrevive al contenedor, portable entre hosts, ideal para produccion."
+    source: "https://docs.docker.com/storage/volumes/"
+
+  - topic: volumenes
+    level: basic
+    difficulty: intermediate
+    type: true_false
+    prompt: "Un bind mount `-v /host/dir:/app` hace que el contenedor vea en /app el contenido vivo de /host/dir."
+    answer: "true"
+    explanation: ""
+    source: "https://docs.docker.com/storage/bind-mounts/"
+
+  - topic: redes
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "Dos contenedores necesitan hablarse por NOMBRE de servicio. ¿Qué los habilita?"
+    options: ["estar en la red bridge por defecto", "estar en una red definida por el usuario", "usar --link", "compartir el mismo /etc/hosts"]
+    answer: "estar en una red definida por el usuario"
+    explanation: "Las redes personalizadas incluyen DNS interno por nombre; la bridge default solo permite IP."
+    source: "https://docs.docker.com/network/drivers/bridge/"
+
+  - topic: redes
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "docker run -d -p 127.0.0.1:8080:80 nginx significa que web solo es alcanzable:"
+    options: ["desde internet", "desde cualquier equipo de la LAN", "desde el propio host", "desde el contenedor mismo solamente"]
+    answer: "desde el propio host"
+    explanation: "El binding a 127.0.0.1 evita exposicion externa: patron recomendado para servicios internos."
+    source: "https://docs.docker.com/network/"
+
+  - topic: contenedores
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "docker stop usa por defecto que estrategia con el proceso principal:"
+    options: ["SIGKILL inmediato", "SIGTERM con tiempo de gracia para terminar", "pausa de E/S hasta cerrar", "borrar sin avisar"]
+    answer: "SIGTERM con tiempo de gracia para terminar"
+    explanation: "stop = SIGTERM + tiempo (default 10s) antes de SIGKILL."
+    source: "https://docs.docker.com/reference/cli/docker/container/stop/"
+
+  - topic: imagenes
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "Para listar las imagenes locales con su tamano y etiquetas:"
+    options: ["docker ps", "docker images", "docker list images", "docker show images"]
+    answer: "docker images"
+    explanation: ""
+    source: "https://docs.docker.com/reference/cli/docker/image/ls/"

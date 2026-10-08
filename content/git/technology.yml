@@ -1,0 +1,10 @@
+title: Git
+description: "Control de versiones con Git: repositorio, commits, ramas, remotos y como deshacer errores sin miedo."
+version: "1.0"
+icon: git-branch
+color: "#f05033"
+order: 2
+tech_version: "git 2.43+"
+official_docs:
+  - https://git-scm.com/docs
+  - https://git-scm.com/doc

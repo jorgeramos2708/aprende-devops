@@ -44,7 +44,7 @@ public static class TerminalSocketEndpoint
         {
             using var scope = ctx.RequestServices.CreateScope();
             var orchestrator = scope.ServiceProvider.GetRequiredService<ILabOrchestrator>();
-            await orchestrator.ConnectTerminalAsync(attemptId, 120, 30, ctx.RequestAborted);
+            await orchestrator.EnsureTerminalSessionAsync(attemptId, 120, 30, ctx.RequestAborted);
         }
 
         using var socket = await ctx.WebSockets.AcceptWebSocketAsync();

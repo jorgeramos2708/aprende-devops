@@ -183,11 +183,25 @@ public class LabOrchestrator : ILabOrchestrator
         };
     }
 
-    public async Task<TerminalConnection> ConnectTerminalAsync(Guid attemptId, int cols, int rows, CancellationToken ct = default)
+    /// <summary>Uso interno (WS ya validado por token Redis): asegura la sesion sin emitir token.</summary>
+    public async Task EnsureTerminalSessionAsync(Guid attemptId, int cols, int rows, CancellationToken ct = default)
+    {
+        var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
+        if (attempt?.ContainerId == null)
+            throw new InvalidOperationException("Intento de laboratorio no encontrado");
+        await _terminals.EnsureSessionAsync(attemptId, attempt.ContainerId, cols, rows, ct);
+    }
+
+    /// <summary>Token one-shot de terminal con verificacion de propiedad.</summary>
+    public async Task<TerminalConnection> ConnectTerminalAsync(Guid attemptId, Guid userId, int cols, int rows, CancellationToken ct = default)
     {
         var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
         if (attempt == null || attempt.ContainerId == null)
-            throw new InvalidOperationException("Lab attempt not found");
+            throw new InvalidOperationException("Intento de laboratorio no encontrado");
+
+        // Solo el dueño del intento puede abrir su terminal
+        if (attempt.UserId != userId)
+            throw new UnauthorizedAccessException("El intento no pertenece a tu usuario");
 
         var sessionToken = GenerateSessionToken(attemptId);
         await _redis.GetDatabase().StringSetAsync(

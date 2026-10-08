@@ -1,0 +1,112 @@
+# Examen de nivel: Git Basico
+exam:
+  title: "Git — Examen de nivel Basico"
+  description: "8 preguntas aleatorias del banco: ciclo add/commit, ramas, remotos y deshacer."
+  passing_score: 80
+  time_limit_minutes: 20
+  count: 8
+
+questions:
+  - topic: fundamentos
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "¿Qué comando prepara cambios en el área de staging antes de un commit?"
+    options: ["git stage", "git add", "git push", "git stash"]
+    answer: "git add"
+    explanation: "git add mueve cambios del working directory al index (staging)."
+    source: "https://git-scm.com/docs/git-add"
+
+  - topic: fundamentos
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "Un commit en Git es mejor entendido como:"
+    options: ["diff con el anterior", "foto inmutable del árbol de archivos enlazada al commit padre", "parche textual", "archivo zip del proyecto"]
+    answer: "foto inmutable del árbol de archivos enlazada al commit padre"
+    explanation: "Git guarda fotos (snapshots) inmutables con enlace al padre, no diferencias sueltas."
+    source: "https://git-scm.com/docs/git-commit"
+
+  - topic: fundamentos
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "¿Qué comando te dice qué está modificado, en staging o sin seguir?"
+    options: ["git log", "git diff", "git status", "git show"]
+    answer: "git status"
+    explanation: ""
+    source: "https://git-scm.com/docs/git-status"
+
+  - topic: ramas
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "¿Qué secuencia crea una rama y te mueve a ella?"
+    options: ["git branch nueva && git switch nueva", "git switch -c nueva", "git checkout -b nueva", "todas las anteriores cumplen"]
+    answer: "todas las anteriores cumplen"
+    explanation: "switch -c y checkout -b crean y mueven; branch+switch lo hace en dos pasos."
+    source: "https://git-scm.com/docs/git-switch"
+
+  - topic: ramas
+    level: basic
+    difficulty: intermediate
+    type: true_false
+    prompt: "Un merge fast-forward crea siempre un commit de unión con dos padres."
+    answer: "false"
+    explanation: "Fast-forward solo avanza el puntero (sin divergencia); el merge commit aparece cuando ambas ramas avanzaron."
+    source: "https://git-scm.com/docs/git-merge"
+
+  - topic: remotos
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "La diferencia real entre git fetch y git pull es:"
+    options: [
+      "fetch trae todo y modifica tu rama; pull solo lista",
+      "fetch actualiza referencias sin tocar tu trabajo; pull = fetch + merge",
+      "son sinonimos exactos",
+      "pull existe solo en GitHub"
+    ]
+    answer: "fetch actualiza referencias sin tocar tu trabajo; pull = fetch + merge"
+    explanation: "fetch es seguro de correr siempre; pull fusiona con tu rama."
+    source: "https://git-scm.com/docs/git-fetch"
+
+  - topic: remotos
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "Tras clonar, ¿cómo se llama por defecto el remoto del que salió la copia?"
+    options: ["main", "origin", "upstream", "remote"]
+    answer: "origin"
+    explanation: ""
+    source: "https://git-scm.com/docs/git-clone"
+
+  - topic: deshacer
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "El commit del error YA está compartido con el equipo. ¿El comando seguro para deshacerlo es?"
+    options: ["git reset --hard", "git rebase -i", "git revert", "git clean"]
+    answer: "git revert"
+    explanation: "revert crea un commit inverso sin reescribir historia compartida."
+    source: "https://git-scm.com/docs/git-revert"
+
+  - topic: deshacer
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "Hiciste git reset --hard por error y perdiste un commit. ¿Dónde buscar su sha?"
+    options: ["git log -5", "git stash list", "git reflog", "git blame"]
+    answer: "git reflog"
+    explanation: "reflog registra cada movimiento de HEAD aunque el commit ya no sea alcanzable."
+    source: "https://git-scm.com/docs/git-reflog"
+
+  - topic: deshacer
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "Quieres quitar un archivo del staging PERO conservar sus cambios en disco:"
+    options: ["git restore archivo", "git restore --staged archivo", "git reset --hard", "git checkout -- archivo"]
+    answer: "git restore --staged archivo"
+    explanation: "--staged lo saca del index sin tocar tu working directory."
+    source: "https://git-scm.com/docs/git-restore"

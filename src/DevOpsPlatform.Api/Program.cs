@@ -468,7 +468,7 @@ labs.MapPost("/start", async Task<IResult> (LabStartRequest req, HttpContext ctx
     {
         var userId = UserIdOf(ctx);
         var session = await orchestrator.StartLabAsync(req.LabEnvironmentId, userId, ct);
-        var terminal = await orchestrator.ConnectTerminalAsync(session.AttemptId, 120, 30, ct);
+        var terminal = await orchestrator.ConnectTerminalAsync(session.AttemptId, userId, 120, 30, ct);
         return Results.Ok(new LabStartResponse
         {
             AttemptId = session.AttemptId,
@@ -503,8 +503,15 @@ labs.MapPost("/{attemptId}/stop", async (Guid attemptId, ILabOrchestrator orches
 labs.MapPost("/{attemptId}/validate", async (Guid attemptId, ILabOrchestrator orchestrator, CancellationToken ct) =>
     Results.Ok(await orchestrator.ValidateLabAsync(attemptId, ct)));
 
-labs.MapGet("/{attemptId}/terminal/token", async (Guid attemptId, ILabOrchestrator orchestrator, CancellationToken ct) =>
-    Results.Ok(await orchestrator.ConnectTerminalAsync(attemptId, 120, 30, ct)));
+labs.MapGet("/{attemptId}/terminal/token", async Task<IResult> (Guid attemptId, HttpContext ctx, ILabOrchestrator orchestrator, CancellationToken ct) =>
+{
+    try
+    {
+        return Results.Ok(await orchestrator.ConnectTerminalAsync(attemptId, UserIdOf(ctx), 120, 30, ct));
+    }
+    catch (UnauthorizedAccessException) { return Results.Forbid(); }
+    catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
+});
 
 // Assessment Engine
 var assessment = api.MapGroup("/assessment");

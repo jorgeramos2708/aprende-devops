@@ -64,7 +64,7 @@ public static class ContentImportService
 
             // Limpieza de lecciones del seed demo (slugs cortos del DbSeeder heredado)
             // cuando git ya aporta contenido real para esa tecnologia
-            var demoSlugs = new[] { $"{techSlug}-basic-cli", $"{techSlug}-basic-permissions", $"{techSlug}-intermediate-systemd" };
+            var demoSlugs = new[] { $"{techSlug}-basic-cli", $"{techSlug}-basic-permissions", $"{techSlug}-intermediate-systemd", $"{techSlug}-basic-workflow", $"{techSlug}-basic-containers" };
             var demos = await db.KnowledgeNodes
                 .Where(n => n.Type == NodeType.Lesson && demoSlugs.Contains(n.Slug))
                 .ToListAsync(ct);
