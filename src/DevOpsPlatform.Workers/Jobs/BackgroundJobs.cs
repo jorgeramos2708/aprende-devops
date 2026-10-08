@@ -20,27 +20,33 @@ public interface IBackgroundJobService
 
 public class BackgroundJobService : IBackgroundJobService
 {
+    // API por DI (IbackgroundJobClient), nunca la estatica BackgroundJob.*:
+    // con Generic Host el JobStorage solo existe dentro del contenedor de servicios
+    private readonly IBackgroundJobClient _client;
+
+    public BackgroundJobService(IBackgroundJobClient client) => _client = client;
+
     public Task ScheduleLabCleanupAsync(string attemptId, TimeSpan delay)
     {
-        BackgroundJob.Schedule<LabCleanupJob>(j => j.ExecuteAsync(attemptId), delay);
+        _client.Schedule<LabCleanupJob>(j => j.ExecuteAsync(attemptId), delay);
         return Task.CompletedTask;
     }
 
     public Task ScheduleInsightGenerationAsync(string userId)
     {
-        BackgroundJob.Enqueue<InsightGenerationJob>(j => j.ExecuteAsync(userId));
+        _client.Enqueue<InsightGenerationJob>(j => j.ExecuteAsync(userId));
         return Task.CompletedTask;
     }
 
     public Task ScheduleCertificationReadinessAsync(string userId, string certificationId)
     {
-        BackgroundJob.Enqueue<CertificationReadinessJob>(j => j.ExecuteAsync(userId, certificationId));
+        _client.Enqueue<CertificationReadinessJob>(j => j.ExecuteAsync(userId, certificationId));
         return Task.CompletedTask;
     }
 
     public Task ScheduleLabRegressionAsync(string technology, string version)
     {
-        BackgroundJob.Enqueue<LabRegressionJob>(j => j.ExecuteAsync(technology, version));
+        _client.Enqueue<LabRegressionJob>(j => j.ExecuteAsync(technology, version));
         return Task.CompletedTask;
     }
 }
@@ -360,10 +366,8 @@ public class LabRegressionJob
 // Hangfire recurring jobs setup
 public static class RecurringJobs
 {
-    public static void Configure()
+    public static void Configure(IRecurringJobManager manager)
     {
-        var manager = new RecurringJobManager();
-
         // Limpieza diaria de laboratorios expirados a las 3 AM
         manager.AddOrUpdate<LabCleanupJob>("daily-lab-cleanup",
             j => j.ExecuteAsync(CancellationToken.None),

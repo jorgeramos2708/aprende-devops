@@ -35,6 +35,7 @@ builder.Services.AddScoped<LabRegressionJob>();
 
 var app = builder.Build();
 
-RecurringJobs.Configure();
+// Registra jobs recurrentes usando el JobStorage del contenedor DI (no API estatica)
+RecurringJobs.Configure(app.Services.GetRequiredService<IRecurringJobManager>());
 
 await app.RunAsync();
