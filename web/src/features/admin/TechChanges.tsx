@@ -37,10 +37,10 @@ export function TechChanges() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 className="text-xl font-semibold text-dark-900">Cambios detectados</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-nowrap items-center gap-2">
           <Input placeholder="tecnología (opcional)" value={filter} onChange={(e) => setFilter(e.target.value)} />
-          <Button onClick={() => check.mutate()} loading={check.isPending}>
-            <RefreshCw className="w-4 h-4 mr-2" /> Verificar ahora
+          <Button onClick={() => check.mutate()} loading={check.isPending} className="whitespace-nowrap">
+            <RefreshCw className="w-4 h-4 mr-2 shrink-0" /> Verificar ahora
           </Button>
         </div>
       </div>

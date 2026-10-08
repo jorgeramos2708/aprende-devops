@@ -578,6 +578,9 @@ admin.MapGet("/impact-assessments", async (IImpactService impact, CancellationTo
 admin.MapPost("/update-proposals", async (CreateUpdateProposalRequest req, HttpContext ctx, IUpdateService updates, CancellationToken ct) =>
     Results.Ok(await updates.CreateAsync(req.ChangeId, req, UserIdOf(ctx), ct)));
 
+admin.MapGet("/update-proposals", async (IUpdateService updates, CancellationToken ct) =>
+    Results.Ok(await updates.ListAsync(ct)));
+
 admin.MapPost("/update-proposals/{id}/approve", async (Guid id, HttpContext ctx, IUpdateService updates, CancellationToken ct) =>
     Results.Ok(await updates.ApproveAsync(id, UserIdOf(ctx), ct)));
 

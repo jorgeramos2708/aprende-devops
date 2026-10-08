@@ -5,6 +5,7 @@ import { WebLinksAddon } from 'xterm-addon-web-links'
 import { SearchAddon } from 'xterm-addon-search'
 import { Maximize2, Minimize2, Copy, AlertCircle, Loader2 } from 'lucide-react'
 import clsx from 'clsx'
+import 'xterm/css/xterm.css'   // sin este CSS xterm renderiza con caja blanca y offsets rotos
 import { api } from '../lib/api'
 
 interface TerminalProps {
@@ -223,10 +224,10 @@ export function Terminal({ attemptId, onConnect, onDisconnect, onError }: Termin
   }
 
   return (
-    <div className={clsx(
+      <div className={clsx(
       'card relative overflow-hidden flex flex-col',
       maximized && 'fixed inset-4 z-50 lg:inset-8 rounded-xl shadow-2xl',
-      !maximized && 'h-[500px]'
+      !maximized && 'h-[600px]'
     )}>
       <div className="flex items-center justify-between p-3 border-b border-dark-200 bg-dark-50 flex-shrink-0">
         <div className="flex items-center gap-2">

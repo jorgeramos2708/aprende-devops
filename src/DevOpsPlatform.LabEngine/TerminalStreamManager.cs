@@ -57,6 +57,8 @@ public class TerminalStreamManager : IAsyncDisposable
         if (_sessions.TryGetValue(attemptId, out var session))
         {
             lock (session.Subscribers) { session.Subscribers.Add(channel); }
+            // La sesion ya existia (reconexion): avivar el prompt para que el usuario no vea negro
+            _ = WriteAsync(attemptId, "\r");
         }
         return channel.Reader;
     }
