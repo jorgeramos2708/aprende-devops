@@ -63,6 +63,8 @@ services:
       MinIO__SecretKey: ${MINIO_ROOT_PASSWORD}
       MinIO__Bucket: devops-platform
       AllowedOrigins__0: https://aprende-devops.edrs.xyz
+      Admin__Emails: ${ADMIN_EMAILS}
+      Content__Directory: /app/content
       Docker__Host: unix:///var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock   # LabEngine crea labs como hermanos

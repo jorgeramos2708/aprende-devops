@@ -83,6 +83,12 @@ var jwtKey = TokenService.BuildKey(builder.Configuration);
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "devops-platform";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "devops-platform";
 
+// Correos con rol admin al registrarse y en cada arranque (CSV): Admin__Emails
+var adminEmails = (builder.Configuration["Admin:Emails"] ?? "")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .Select(e => e.ToLowerInvariant())
+    .ToHashSet();
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -247,7 +253,8 @@ auth.MapPost("/register", async (RegisterRequest req, PlatformDbContext db, IPas
         Id = Guid.CreateVersion7(),
         Email = email,
         PasswordHash = hasher.Hash(req.Password),
-        DisplayName = string.IsNullOrWhiteSpace(req.DisplayName) ? email : req.DisplayName.Trim()
+        DisplayName = string.IsNullOrWhiteSpace(req.DisplayName) ? email : req.DisplayName.Trim(),
+        Roles = adminEmails.Contains(email) ? ["student", "admin"] : ["student"]
     };
     db.Users.Add(user);
     await db.SaveChangesAsync(ct);
@@ -559,6 +566,19 @@ using (var scope = app.Services.CreateScope())
     // Pipeline de contenido como codigo: content/ (git) -> DB (upsert idempotente)
     await ContentImportService.ImportAsync(
         db, app.Configuration["Content:Directory"] ?? "/app/content", log);
+
+    // Bootstrap de administradores por configuracion (Admin__Emails en el .env del VPS)
+    if (adminEmails.Count > 0)
+    {
+        var candidates = await db.Users.Where(u => adminEmails.Contains(u.Email)).ToListAsync();
+        foreach (var u in candidates.Where(u => !u.Roles.Contains("admin")))
+        {
+            var promoted = u with { Roles = [.. u.Roles, "admin"] };
+            db.Entry(u).CurrentValues.SetValues(promoted);
+            log.LogInformation("Cuenta promovida a admin via Admin__Emails: {Email}", u.Email);
+        }
+        await db.SaveChangesAsync();
+    }
 }
 
 app.Run();

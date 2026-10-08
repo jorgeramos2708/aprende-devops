@@ -1,8 +1,35 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { Menu, ChevronDown, Home, BookOpen, Terminal, Trophy, Award, Lightbulb, User, Settings, Shield, GitBranch, Bug, FlaskConical } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useState } from 'react'
 import clsx from 'clsx'
+
+interface ProgressItem {
+  nodeId: string
+  status: string
+}
+
+// Mini-resumen de progreso en la barra lateral (#6)
+function SidebarProgress() {
+  const { data } = useQuery<ProgressItem[]>({
+    queryKey: ['my-progress'],
+    queryFn: async () => (await api.get('/learning/progress')).data as ProgressItem[],
+    staleTime: 60_000,
+  })
+  const completed = (data ?? []).filter((p) => p.status === 'completed' || p.status === 'mastered').length
+  const inProgress = (data ?? []).filter((p) => p.status === 'in_progress').length
+
+  return (
+    <div className="mx-4 mb-3 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-700">Tu progreso</p>
+      <p className="text-xs text-primary-800">
+        {completed} completadas{inProgress > 0 ? ` · ${inProgress} en curso` : ''}
+      </p>
+    </div>
+  )
+}
 
 export function Layout() {
   const { user, logout } = useAuth()
@@ -29,15 +56,15 @@ export function Layout() {
     <div className="min-h-screen bg-dark-50">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar: SIEMPRE fixed (el error lg:static apilaba el contenido debajo) */}
       <aside className={clsx(
-        'fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-dark-200 transform transition-transform duration-300',
+        'fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-dark-200 transform transition-transform duration-300',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       )}>
         <div className="flex flex-col h-full">
@@ -55,7 +82,7 @@ export function Layout() {
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {navItems.map(item => {
               const Icon = item.icon
-              const isActive = location.pathname === item.path || 
+              const isActive = location.pathname === item.path ||
                 (item.path !== '/' && location.pathname.startsWith(item.path))
               return (
                 <NavLink
@@ -64,8 +91,8 @@ export function Layout() {
                   onClick={() => setSidebarOpen(false)}
                   className={clsx(
                     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                    isActive 
-                      ? 'bg-primary-50 text-primary-700' 
+                    isActive
+                      ? 'bg-primary-50 text-primary-700'
                       : 'text-dark-600 hover:bg-dark-100 hover:text-dark-900'
                   )}
                 >
@@ -90,8 +117,8 @@ export function Layout() {
                       onClick={() => setSidebarOpen(false)}
                       className={clsx(
                         'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                        isActive 
-                          ? 'bg-primary-50 text-primary-700' 
+                        isActive
+                          ? 'bg-primary-50 text-primary-700'
                           : 'text-dark-600 hover:bg-dark-100 hover:text-dark-900'
                       )}
                     >
@@ -104,8 +131,38 @@ export function Layout() {
             )}
           </nav>
 
-          {/* User section */}
-          <div className="p-4 border-t border-dark-200">
+          <SidebarProgress />
+
+          {/* User section (menu se abre hacia arriba, pegado al usuario) */}
+          <div className="p-4 border-t border-dark-200 relative">
+            {userMenuOpen && (
+              <div className="absolute bottom-full left-4 right-4 mb-2 w-auto bg-white rounded-lg shadow-lg border border-dark-200 py-1 z-50">
+                <NavLink
+                  to="/profile"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-dark-700 hover:bg-dark-50"
+                  onClick={() => setUserMenuOpen(false)}
+                >
+                  <User className="w-4 h-4" />
+                  Perfil
+                </NavLink>
+                <NavLink
+                  to="/settings"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-dark-700 hover:bg-dark-50"
+                  onClick={() => setUserMenuOpen(false)}
+                >
+                  <Settings className="w-4 h-4" />
+                  Configuración
+                </NavLink>
+                <hr className="my-1 border-dark-200" />
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                >
+                  <Shield className="w-4 h-4" />
+                  Cerrar sesión
+                </button>
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center">
                 <span className="text-primary-700 font-medium text-sm">
@@ -120,46 +177,16 @@ export function Layout() {
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="p-1.5 rounded-lg text-dark-500 hover:bg-dark-100 hover:text-dark-700 transition-colors"
               >
-                <ChevronDown className="w-5 h-5" />
+                <ChevronDown className={clsx('w-5 h-5 transition-transform', userMenuOpen && 'rotate-180')} />
               </button>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* User dropdown */}
-      {userMenuOpen && (
-        <div className="fixed right-4 top-16 z-50 w-48 bg-white rounded-lg shadow-lg border border-dark-200 py-1">
-          <NavLink
-            to="/profile"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-dark-700 hover:bg-dark-50"
-            onClick={() => setUserMenuOpen(false)}
-          >
-            <User className="w-4 h-4" />
-            Perfil
-          </NavLink>
-          <NavLink
-            to="/settings"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-dark-700 hover:bg-dark-50"
-            onClick={() => setUserMenuOpen(false)}
-          >
-            <Settings className="w-4 h-4" />
-            Configuración
-          </NavLink>
-          <hr className="my-1 border-dark-200" />
-          <button
-            onClick={logout}
-            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-          >
-            <Shield className="w-4 h-4" />
-            Cerrar sesión
-          </button>
-        </div>
-      )}
-
       {/* Main content */}
       <div className="lg:pl-64">
-        {/* Top bar */}
+        {/* Top bar (solo movil) */}
         <header className="sticky top-0 z-30 bg-white border-b border-dark-200 lg:hidden">
           <div className="flex items-center justify-between h-16 px-4">
             <button
