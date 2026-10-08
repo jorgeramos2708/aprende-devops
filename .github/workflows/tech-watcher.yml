@@ -15,13 +15,16 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Install SSH key
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' '${{ secrets.SSH_PRIVATE_KEY }}' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' '${{ secrets.SSH_KNOWN_HOSTS }}' > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
       - name: Execute watcher in VPS container
         run: |
-          ssh -p 2222 ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} \
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -p 2222 \
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} \
             "docker exec aprende-techwatcher dotnet DevOpsPlatform.TechWatcher.dll --once '${{ github.event.inputs.technology }}'"

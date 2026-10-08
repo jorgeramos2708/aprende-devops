@@ -150,17 +150,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install SSH key
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+      - name: Prepare SSH (llave + known_hosts desde secrets)
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' '${{ secrets.SSH_PRIVATE_KEY }}' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' '${{ secrets.SSH_KNOWN_HOSTS }}' > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          ssh-keygen -lf ~/.ssh/deploy_key   # fingerprint visible para depurar (no expone la llave)
 
       - name: Deploy via SSH
         run: |
-          # SSH del VPS en puerto 2222; KNOWN_HOSTS generar con: ssh-keyscan -p 2222 <ip>
-          # fetch+reset: deploy dir siempre limpio y auto-sanable (.env es ignorado por git)
-          ssh -p 2222 ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
+          # SSH del VPS en puerto 2222; KNOWN_HOSTS = salida de: ssh-keyscan -p 2222 <ip>
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -p 2222 \
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
             set -e
             cd /opt/aprende-devops
             git fetch origin
@@ -173,5 +176,5 @@ jobs:
 
       - name: Health check
         run: |
-          sleep 30
-          curl -fsS https://aprende-devops.edrs.xyz/health || exit 1
+          # Primer arranque puede tardar: migraciones EF + seed. Reintentos tolerantes.
+          curl --retry 10 --retry-delay 20 --retry-all-errors -fsS https://aprende-devops.edrs.xyz/health
