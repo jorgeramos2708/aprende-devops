@@ -1,0 +1,13 @@
+title: Linux
+description: "Fundamentos de Linux para DevOps: terminal, sistema de archivos, permisos, usuarios, procesos, paquetes, systemd y red. Base obligatoria de todo el roadmap."
+version: "1.0"
+icon: terminal
+color: "#f2c94c"
+order: 1
+tech_version: "Debian 12 / Ubuntu 24.04 LTS"
+official_docs:
+  - https://man7.org/linux/man-pages/
+  - https://www.kernel.org/doc/
+  - https://www.debian.org/doc/
+  - https://www.freedesktop.org/software/systemd/man/
+  - https://lpi.org/our-certifications/lpic-1-overview/

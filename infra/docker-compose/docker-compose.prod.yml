@@ -67,6 +67,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock   # LabEngine crea labs como hermanos
       - api-logs:/app/logs
+      - ../../content:/app/content:ro               # contenido educativo versionado en git
     networks: [proxy, internal]
     depends_on:
       postgres: { condition: service_healthy }

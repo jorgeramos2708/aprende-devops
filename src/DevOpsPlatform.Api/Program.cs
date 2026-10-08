@@ -492,7 +492,11 @@ using (var scope = app.Services.CreateScope())
     await db.Database.MigrateAsync();
     var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
     var log = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    // Contenido demo minimo solo si la base esta vacia (fallback de desarrollo)
     await DbSeeder.SeedAsync(db, hasher, log);
+    // Pipeline de contenido como codigo: content/ (git) -> DB (upsert idempotente)
+    await ContentImportService.ImportAsync(
+        db, app.Configuration["Content:Directory"] ?? "/app/content", log);
 }
 
 app.Run();

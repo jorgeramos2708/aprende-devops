@@ -1,0 +1,198 @@
+# Banco de preguntas y definicion del examen de nivel: Linux Basico
+# Reglas: respuestas extraidas de la documentacion oficial (man pages / FHS / systemd docs).
+exam:
+  title: "Linux — Examen de nivel Basico"
+  description: "10 preguntas aleatorias del banco: terminal, FHS, archivos, permisos, usuarios, procesos, paquetes, systemd, pipes y redes."
+  passing_score: 80
+  time_limit_minutes: 30
+  count: 10
+
+questions:
+  - topic: cli
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "¿Qué comando muestra el directorio de trabajo actual?"
+    options: ["pwd", "ls", "cd ~", "whereami"]
+    answer: "pwd"
+    explanation: "pwd (print working directory) imprime la ruta absoluta del directorio actual."
+    source: "https://man7.org/linux/man-pages/man1/pwd.1.html"
+
+  - topic: cli
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "¿Cómo se consulta la página del manual oficial del comando ls?"
+    options: ["ls --manual", "man ls", "help ls", "doc ls"]
+    answer: "man ls"
+    explanation: "man abre la página de manual local del comando; sal con q."
+    source: "https://man7.org/linux/man-pages/man1/man.1.html"
+
+  - topic: filesystem
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "Según la FHS, ¿dónde viven los archivos de configuración del sistema?"
+    options: ["/etc", "/var", "/opt", "/usr/share"]
+    answer: "/etc"
+    explanation: "La FHS define /etc como el directorio de configuración en texto plano del sistema."
+    source: "https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html"
+
+  - topic: filesystem
+    level: basic
+    difficulty: beginner
+    type: true_false
+    prompt: "En Linux, un disco nuevo aparece obligatoriamente como letra de unidad (D:, E:)."
+    answer: "false"
+    explanation: "Linux no usa letras de unidad: todo cuelga de la raíz / y los discos se montan como directorios."
+    source: "https://man7.org/linux/man-pages/man7/hier.7.html"
+
+  - topic: archivos
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "¿Qué opción muestra en vivo las últimas líneas de un log a medida que crece?"
+    options: ["head -f", "tail -f", "less -f", "cat -f"]
+    answer: "tail -f"
+    explanation: "tail -f sigue el archivo y muestra las líneas nuevas en tiempo real."
+    source: "https://man7.org/linux/man-pages/man1/tail.1.html"
+
+  - topic: permisos
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "Un archivo con permisos 644 significa:"
+    options: [
+      "dueño lee/escribe, grupo y otros solo leen",
+      "todos leen y escriben",
+      "dueño lee/escribe/ejecuta, resto solo ejecuta",
+      "solo el dueño lo lee"
+    ]
+    answer: "dueño lee/escribe, grupo y otros solo leen"
+    explanation: "6 = rw- (dueño), 4 = r-- (grupo), 4 = r-- (otros)."
+    source: "https://man7.org/linux/man-pages/man1/chmod.1.html"
+
+  - topic: permisos
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "¿Qué permiso numérico es el adecuado para una llave privada SSH (solo el dueño)?"
+    options: ["755", "644", "600", "777"]
+    answer: "600"
+    explanation: "rw- --- --- : solo el dueño lee/escribe; ssh rechaza llaves con permisos más abiertos."
+    source: "https://man7.org/linux/man-pages/man1/chmod.1.html"
+
+  - topic: usuarios
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "¿En qué archivo se almacenan los hashes de las contraseñas (no texto claro)?"
+    options: ["/etc/passwd", "/etc/shadow", "/etc/group", "/etc/security/keys"]
+    answer: "/etc/shadow"
+    explanation: "/etc/passwd lista cuentas; los hashes viven protegidos en /etc/shadow (legible solo por root)."
+    source: "https://man7.org/linux/man-pages/man5/shadow.5.html"
+
+  - topic: usuarios
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "¿Qué comando agrega al usuario ana al grupo docker SIN quitarle sus otros grupos?"
+    options: ["usermod -G docker ana", "usermod -aG docker ana", "groupadd docker ana", "chgrp docker ana"]
+    answer: "usermod -aG docker ana"
+    explanation: "-aG agrega (append) al grupo; -G solo REEMPLAZA la lista completa de grupos suplementarios."
+    source: "https://man7.org/linux/man-pages/man8/usermod.8.html"
+
+  - topic: procesos
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "¿Qué señal pide a un proceso terminar de forma limpia (la forma correcta antes de forzar)?"
+    options: ["KILL (9)", "TERM (15)", "STOP", "HUP"]
+    answer: "TERM (15)"
+    explanation: "TERM permite al proceso cerrar archivos y liberar recursos; KILL (-9) es el último recurso."
+    source: "https://man7.org/linux/man-pages/man7/signal.7.html"
+
+  - topic: procesos
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "¿Qué combinación lista los procesos que más memoria consumen?"
+    options: ["ps aux --sort=-%mem | head", "top -m | first", "ps -e --by-mem", "lsmem --processes"]
+    answer: "ps aux --sort=-%mem | head"
+    explanation: "ps con --sort=-%mem ordena de mayor a menor uso de memoria; head corta el top."
+    source: "https://man7.org/linux/man-pages/man1/ps.1.html"
+
+  - topic: paquetes
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "Antes de instalar o actualizar paquetes con apt, el primer paso siempre es:"
+    options: ["sudo apt upgrade", "sudo apt update", "sudo apt clean", "sudo apt autoremove"]
+    answer: "sudo apt update"
+    explanation: "update refresca el índice de paquetes disponibles; upgrade opera sobre ese índice ya actualizado."
+    source: "https://man7.org/linux/man-pages/man8/apt.8.html"
+
+  - topic: systemd
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "¿Qué comando muestra los logs de un servicio llamado nginx?"
+    options: ["systemctl logs nginx", "journalctl -u nginx", "cat /var/log/nginx.journal", "service nginx --logs"]
+    answer: "journalctl -u nginx"
+    explanation: "journalctl -u <unit> filtra el journal por unidad systemd; con -f la sigues en vivo."
+    source: "https://www.freedesktop.org/software/systemd/man/journalctl.html"
+
+  - topic: texto
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "¿Qué hace exactamente: comando > salida.log 2>&1 ?"
+    options: [
+      "Escribe solo stdout en el archivo",
+      "Escribe stdout y stderr en el archivo",
+      "Lee el archivo como entrada",
+      "Agrega solo stderr al final del archivo"
+    ]
+    answer: "Escribe stdout y stderr en el archivo"
+    explanation: "> redirige stdout (sobreescribiendo) y 2>&1 envía stderr al mismo destino."
+    source: "https://www.gnu.org/software/bash/manual/html_node/Redirections.html"
+
+  - topic: texto
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "Necesitas contar cuántas líneas del log contienen 'error' (sin importar mayúsculas). ¿Cuál?"
+    options: [
+      "grep error app.log | wc -l",
+      "grep -i error app.log | wc -l",
+      "wc -l app.log | grep -i error",
+      "grep -c -v error app.log"
+    ]
+    answer: "grep -i error app.log | wc -l"
+    explanation: "grep -i filtra insensible a mayúsculas y wc -l cuenta las líneas resultantes."
+    source: "https://man7.org/linux/man-pages/man1/grep.1.html"
+
+  - topic: redes
+    level: basic
+    difficulty: beginner
+    type: single_choice
+    prompt: "¿Qué comando muestra qué puertos TCP están escuchando y qué proceso los abrió?"
+    options: ["ip addr", "ss -tlnp", "ping -t localhost", "netstat -route"]
+    answer: "ss -tlnp"
+    explanation: "ss -tlnp lista sockets TCP en escucha (t), numéricos (n), listening (l) con proceso (p)."
+    source: "https://man7.org/linux/man-pages/man8/ss.8.html"
+
+  - topic: redes
+    level: basic
+    difficulty: intermediate
+    type: single_choice
+    prompt: "curl a tu API dentro del servidor responde 200, pero desde fuera da timeout. La causa más probable es:"
+    options: [
+      "La app está rota",
+      "La ruta DNS del dominio matriz",
+      "Firewall o red bloqueando el puerto",
+      "El binario de curl está desactualizado"
+    ]
+    answer: "Firewall o red bloqueando el puerto"
+    explanation: "Si responde local pero no remoto, el servicio escucha y el problema es de red/firewall, no de la aplicación."
+    source: "https://curl.se/docs/manpage.html"
