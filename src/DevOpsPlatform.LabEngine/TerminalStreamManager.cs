@@ -52,7 +52,8 @@ public class TerminalStreamManager : IAsyncDisposable
         }
 
         session.PumpTask = Task.Run(() => PumpOutputAsync(session));
-        _logger.LogInformation("Sesion de terminal iniciada para intento {AttemptId} (contenedor {ContainerId})", attemptId, containerId);
+        _logger.LogInformation("Sesion de terminal iniciada para intento {AttemptId} (contenedor {ContainerId}, exec {ExecId})",
+            attemptId, containerId, exec.ExecId);
     }
 
     public ChannelReader<string> Subscribe(Guid attemptId)
@@ -129,9 +130,14 @@ public class TerminalStreamManager : IAsyncDisposable
             while (!session.Cancel.IsCancellationRequested)
             {
                 var read = await session.Stream.ReadAsync(buffer.AsMemory(0, buffer.Length), session.Cancel.Token);
-                if (read <= 0) break; // EOF: shell finalizo
+                if (read <= 0)
+                {
+                    _logger.LogWarning("Pump {AttemptId}: EOF del stream exec", session.AttemptId);
+                    break; // EOF: shell finalizo
+                }
 
                 var text = System.Text.Encoding.UTF8.GetString(buffer, 0, read);
+                _logger.LogInformation("Pump {AttemptId}: leidos {N} bytes", session.AttemptId, read);
                 session.AppendTail(text);
                 lock (session.Subscribers)
                 {

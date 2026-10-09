@@ -189,6 +189,8 @@ public class LabOrchestrator : ILabOrchestrator
         var attempt = await _db.LabAttempts.FindAsync([attemptId], ct);
         if (attempt?.ContainerId == null)
             throw new InvalidOperationException("Intento de laboratorio no encontrado");
+        _logger.LogInformation("EnsureTerminalSession: intento {AttemptId}, contenedor {Container}, estado {Status}",
+            attemptId, attempt.ContainerId, attempt.Status);
         await _terminals.EnsureSessionAsync(attemptId, attempt.ContainerId, cols, rows, ct);
     }
 
