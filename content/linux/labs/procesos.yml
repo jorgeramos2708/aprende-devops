@@ -1,6 +1,12 @@
 slug: linux-procesos
 name: "Linux: procesos y señales"
-description: "Localiza procesos fugitivos y terminalos con la señal adecuada. Practica TERM antes que KILL."
+description: "Localiza el proceso fugitivo y terminalo con la señal adecuada. Practica TERM antes que KILL."
+tasks:
+  - "Lista procesos con ps aux y localiza el fugitivo (busca 'sleep' en su comando)"
+  - "Encuentra su PID exacto con pgrep -f 'while :; do sleep 5'"
+  - "Terminalo con kill (señal TERM primero; kill -KILL solo si ignora)"
+  - "Escribe la palabra 'terminado' en ~/proceso-terminado.txt como evidencia"
+  - "Pulsa Validar"
 type: practice
 image: registry.edrs.xyz/labs/linux-basic:latest
 timeout_seconds: 3600

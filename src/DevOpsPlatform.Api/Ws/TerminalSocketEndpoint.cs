@@ -39,8 +39,8 @@ public static class TerminalSocketEndpoint
 
         var manager = ctx.RequestServices.GetRequiredService<TerminalStreamManager>();
 
-        // Si no hay sesion activa (p. ej. tras recargar), la recreamos desde el intento
-        if (!manager.IsActive(attemptId))
+        // Si no hay sesion activa o murio (EOF/fallo), la recreamos desde el intento.
+        // Es idempotente: la reconexion de una pestaña simplemente reintenta y comparte sesion viva.
         {
             using var scope = ctx.RequestServices.CreateScope();
             var orchestrator = scope.ServiceProvider.GetRequiredService<ILabOrchestrator>();

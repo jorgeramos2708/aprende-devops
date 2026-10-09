@@ -12,6 +12,7 @@ interface Lab {
   description?: string
   baseImage?: string
   timeoutSeconds?: number
+  metadata?: { tasks?: string[]; level?: string; estimatedTimeMinutes?: number }
 }
 
 export function LabView() {
@@ -83,7 +84,34 @@ export function LabView() {
       {start.isError && <p className="text-sm text-red-600">No se pudo iniciar el laboratorio.</p>}
 
       {attemptId ? (
-        <Terminal attemptId={attemptId} />
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Terminal attemptId={attemptId} />
+          </div>
+
+          {/* Tareas numeradas y explicitas del laboratorio */}
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle>Tareas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(lab?.metadata?.tasks?.length ?? 0) > 0 ? (
+                <ol className="space-y-2 list-none">
+                  {lab!.metadata!.tasks!.map((t, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-dark-700">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary-100 text-primary-800 text-xs font-bold flex items-center justify-center">
+                        {i + 1}
+                      </span>
+                      <span>{t}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-sm text-dark-500">Laboratorio libre: explora y valida cuando quieras.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <Card>
           <CardHeader>

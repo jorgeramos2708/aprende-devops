@@ -1,6 +1,13 @@
 slug: linux-cli-basico
 name: "Linux: navegación y archivos"
 description: "Practica navegar el filesystem, crear estructuras, copiar/mover y buscar. Las tareas se validan al pulsar Validar."
+tasks:
+  - "Crea dentro de ~/practica el directorio proyectos (mkdir -p)"
+  - "Copia el archivo ~/practica/sistema.txt dentro de ~/practica/proyectos/"
+  - "De ~/practica/datos/numeros.txt conserva solo las 25 primeras lineas en ~/practica/datos/numeros-25.txt (usa head)"
+  - "Guarda en ~/practica/recuento.txt la ultima linea de ls -l ~/practica/datos (usa tail -1 con redireccion)"
+  - "Encuentra la linea con la palabra 'camino' en ~/practica/datos/pista.txt (grep) y guarda esa linea en ~/practica/descubrimiento.txt"
+  - "Pulsa el boton Validar cuando termines las anteriores"
 type: guided
 image: registry.edrs.xyz/labs/linux-basic:latest
 timeout_seconds: 3600

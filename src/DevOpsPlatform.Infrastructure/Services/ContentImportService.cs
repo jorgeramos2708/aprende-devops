@@ -363,7 +363,8 @@ public static class ContentImportService
             level = def.Level ?? "basic",
             module = def.Module ?? "",
             lesson = def.Lesson ?? "",
-            estimatedTimeMinutes = def.EstimatedMinutes
+            estimatedTimeMinutes = def.EstimatedMinutes,
+            tasks = def.Tasks ?? []
         }));
 
         var existing = await db.LabEnvironments.FirstOrDefaultAsync(l => l.Slug == def.Slug, ct);
@@ -424,6 +425,7 @@ public static class ContentImportService
         public int EstimatedMinutes { get; set; } = 30;
         public string? SetupScript { get; set; }
         public string? ValidationScript { get; set; }
+        public List<string>? Tasks { get; set; }
         public LabResourcesYaml? Resources { get; set; }
     }
 

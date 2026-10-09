@@ -1,6 +1,12 @@
 slug: linux-permisos
 name: "Linux: permisos y propiedad"
 description: "Ajusta permisos y propietarios hasta cumplir una politica de seguridad realista. Valida con el boton Validar."
+tasks:
+  - "De ~/taller/deploy.sh: dejalo ejecutable por todos (755) con chmod"
+  - "De ~/taller/secreto.txt: solo su duenio puede leerlo/escribirlo (600) con chmod"
+  - "De ~/taller/publico.txt: asigna como duenio al usuario lab (chown, requiere sudo)"
+  - "Ejecuta ~/taller/deploy.sh para comprobar que funciona"
+  - "Pulsa Validar cuando cumplas las anteriores"
 type: practice
 image: registry.edrs.xyz/labs/linux-basic:latest
 timeout_seconds: 3600

@@ -26,6 +26,11 @@ public class TerminalStreamManager : IAsyncDisposable
 
     public async Task EnsureSessionAsync(Guid attemptId, string containerId, int cols, int rows, CancellationToken ct = default)
     {
+        // Sesion existente pero muerta (pump termino: EOF, contenedor caido) -> recrear
+        if (_sessions.TryGetValue(attemptId, out var muerta) && muerta.PumpTask.IsCompleted)
+        {
+            await StopAsync(attemptId);
+        }
         if (_sessions.ContainsKey(attemptId)) return;
 
         var exec = await _runtime.AttachExecShellAsync(containerId, cols, rows, ct);
@@ -42,7 +47,6 @@ public class TerminalStreamManager : IAsyncDisposable
 
         if (!_sessions.TryAdd(attemptId, session))
         {
-            // Carrera: otra pestaña la creo primero
             await exec.Stream.DisposeAsync();
             return;
         }
@@ -56,9 +60,14 @@ public class TerminalStreamManager : IAsyncDisposable
         var channel = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
         if (_sessions.TryGetValue(attemptId, out var session))
         {
-            lock (session.Subscribers) { session.Subscribers.Add(channel); }
-            // La sesion ya existia (reconexion): avivar el prompt para que el usuario no vea negro
-            _ = WriteAsync(attemptId, "\r");
+            lock (session.Subscribers)
+            {
+                // Replay: la salida previa (incluido el prompt) se habia difundido antes de
+                // que esta pestaña se suscribiera -> entregarla como primer frame
+                if (!string.IsNullOrEmpty(session.OutputTail))
+                    channel.Writer.TryWrite(session.OutputTail);
+                session.Subscribers.Add(channel);
+            }
         }
         return channel.Reader;
     }
@@ -123,6 +132,7 @@ public class TerminalStreamManager : IAsyncDisposable
                 if (read <= 0) break; // EOF: shell finalizo
 
                 var text = System.Text.Encoding.UTF8.GetString(buffer, 0, read);
+                session.AppendTail(text);
                 lock (session.Subscribers)
                 {
                     foreach (var ch in session.Subscribers) ch.Writer.TryWrite(text);
@@ -133,12 +143,18 @@ public class TerminalStreamManager : IAsyncDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Pump de terminal fallo para {AttemptId}", session.AttemptId);
-            lock (session.Subscribers)
-            {
-                foreach (var ch in session.Subscribers)
-                    ch.Writer.TryWrite("\r\n\x1b[31m[Error de conexion con el contenedor]\x1b[0m\r\n");
-            }
+            session.AppendTail("\r\n\x1b[31m[Error de conexion con el contenedor]\x1b[0m\r\n");
         }
+
+        // La sesion murio (EOF/expirada): drenar suscriptores y retirarla para que
+        // una futura reconexion la recree desde cero
+        _sessions.TryRemove(session.AttemptId, out _);
+        lock (session.Subscribers)
+        {
+            foreach (var ch in session.Subscribers) ch.Writer.TryComplete();
+            session.Subscribers.Clear();
+        }
+        _logger.LogInformation("Sesion de terminal finalizada para intento {AttemptId}", session.AttemptId);
     }
 
     public async ValueTask DisposeAsync()
@@ -149,6 +165,9 @@ public class TerminalStreamManager : IAsyncDisposable
 
     private sealed class TerminalSession
     {
+        private const int TailLimit = 256 * 1024; // ultimos 256 KB de salida (prompt + contexto al reconectar)
+        private string _tail = string.Empty;
+
         public required Guid AttemptId { get; init; }
         public required string ContainerId { get; init; }
         public required string ExecId { get; init; }
@@ -159,5 +178,14 @@ public class TerminalStreamManager : IAsyncDisposable
         public List<Channel<string>> Subscribers { get; } = new();
         public SemaphoreSlim WriteLock { get; } = new(1, 1);
         public Task PumpTask { get; set; } = Task.CompletedTask;
+
+        public string OutputTail => _tail;
+
+        public void AppendTail(string text)
+        {
+            _tail = _tail.Length + text.Length > TailLimit
+                ? _tail[(_tail.Length + text.Length - TailLimit)..] + text
+                : _tail + text;
+        }
     }
 }
