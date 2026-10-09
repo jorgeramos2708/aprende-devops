@@ -47,7 +47,9 @@ public sealed class DockerSocketExecClient
     /// <summary>exec interactivo con PTY -> stream crudo bidireccional listo para la terminal.</summary>
     public async Task<ExecStream> StartInteractiveAsync(string containerId, int cols, int rows, CancellationToken ct)
     {
-        var execId = await CreateExecAsync(containerId, new List<string> { "sh", "-c", "exec bash -l 2>/dev/null || exec sh -l" },
+        // bash/sh con -i FORZADO: sin ello, ciertos engines la dejan no-interactiva
+        // ($- sin 'i') -> sin prompt y muere ante SIGINT. bash -li = prompt + job control.
+        var execId = await CreateExecAsync(containerId, new List<string> { "sh", "-c", "exec bash -li 2>/dev/null || exec sh -li" },
             stdin: true, tty: true, cols, rows, ct);
         var stream = await ConnectAsync(ct);
         var body = "{\"Detach\":false,\"Tty\":true}";

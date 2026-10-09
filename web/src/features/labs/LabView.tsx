@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Loader2, Play, Square, CheckCircle } from 'lucide-react'
+import { Loader2, Play, Square, CheckCircle, Timer } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/Card'
 import { Button } from '../../components/Button'
@@ -18,6 +18,8 @@ interface Lab {
 export function LabView() {
   const { id } = useParams<{ id: string }>()
   const [attemptId, setAttemptId] = useState<string | null>(null)
+  const [expiresAt, setExpiresAt] = useState<Date | null>(null)
+  const [remain, setRemain] = useState<string>('')
   const [validation, setValidation] = useState<string | null>(null)
 
   const { data: lab, isLoading } = useQuery<Lab>({
@@ -26,12 +28,29 @@ export function LabView() {
     enabled: !!id,
   })
 
+  // Cuenta regresiva del intento activo (#2)
+  useEffect(() => {
+    if (!expiresAt) { setRemain(''); return }
+    const tick = () => {
+      const ms = expiresAt.getTime() - Date.now()
+      if (ms <= 0) { setRemain('00:00'); return }
+      const mm = Math.floor(ms / 60000)
+      const ss = Math.floor((ms % 60000) / 1000)
+      setRemain(`${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`)
+    }
+    tick()
+    const timer = setInterval(tick, 1000)
+    return () => clearInterval(timer)
+  }, [expiresAt])
+
   const start = useMutation({
     mutationFn: async () => (await api.post('/labs/start', { labEnvironmentId: id })).data,
     onSuccess: (data) => {
       const aid = data?.attemptId ?? data?.AttemptId ?? null
       setAttemptId(aid)
       setValidation(null)
+      const exp = data?.expiresAt ?? data?.ExpiresAt
+      setExpiresAt(exp ? new Date(exp) : null)
     },
   })
 
@@ -40,6 +59,7 @@ export function LabView() {
       if (!attemptId) return
       await api.post(`/labs/${attemptId}/stop`)
       setAttemptId(null)
+      setExpiresAt(null)
     },
   })
 
@@ -63,7 +83,14 @@ export function LabView() {
           <h1 className="text-2xl font-bold text-dark-900">{lab?.name ?? 'Laboratorio'}</h1>
           <p className="text-dark-600">{lab?.description ?? 'Practica en una terminal real.'}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {attemptId && remain && (
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-semibold ${
+              remain < '05:00' ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-dark-100 text-dark-700'
+            }`}>
+              <Timer className="w-4 h-4" /> {remain}
+            </span>
+          )}
           {!attemptId ? (
             <Button onClick={() => start.mutate()} loading={start.isPending}>
               <Play className="w-4 h-4 mr-2" /> Iniciar laboratorio
